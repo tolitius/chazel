@@ -4,6 +4,7 @@
             [clojure.tools.logging :refer [warn]])
   (:import [java.util Collection Map]
            [com.hazelcast.core Hazelcast IMap]
+           [com.hazelcast.query SqlPredicate]
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
@@ -120,3 +121,6 @@
    (add-index m index false))
   ([^IMap m index ordered?]
    (.addIndex m index ordered?)))
+
+(defn select [m where]
+  (.values m (SqlPredicate. where)))
