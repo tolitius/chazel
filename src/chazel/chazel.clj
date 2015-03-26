@@ -114,3 +114,9 @@
 
 (defn put-all! [^IMap dest ^Map src]
   (.putAll dest src))
+
+(defn add-index 
+  ([^IMap m index]
+   (add-index m index false))
+  ([^IMap m index ordered?]
+   (.addIndex m index ordered?)))
