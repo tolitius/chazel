@@ -25,16 +25,17 @@
     (Hazelcast/getOrCreateHazelcastInstance conf)))
 
 (def client-config
-  (let [config (ClientConfig.)]
-    (doto config 
-      (.getNetworkConfig)
-      (.addAddress (into-array (conf :hz-client :addresses)))
-      (.setConnectionAttemptPeriod (conf :hz-client :time-between-connection-retries-ms))
-      (.setConnectionAttemptLimit (conf :hz-client :retry-max)))
-    config))
+  (delay
+    (let [config (ClientConfig.)]
+      (doto config 
+        (.getNetworkConfig)
+        (.addAddress (into-array (conf :hz-client :addresses)))
+        (.setConnectionAttemptPeriod (conf :hz-client :time-between-connection-retries-ms))
+        (.setConnectionAttemptLimit (conf :hz-client :retry-max)))
+      config)))
 
 (def c-instance
-  (delay (atom (HazelcastClient/newHazelcastClient client-config))))
+  (delay (atom (HazelcastClient/newHazelcastClient @client-config))))
 
 (defn instance-active? [instance]
   (-> instance
@@ -47,7 +48,7 @@
       ci
       (try
         (reset! @c-instance
-                (HazelcastClient/newHazelcastClient client-config))
+                (HazelcastClient/newHazelcastClient @client-config))
         (catch Throwable t
                (warn "could not create hazelcast a client instance: " (.getMessage t)))))))
 
