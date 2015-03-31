@@ -116,6 +116,12 @@
 (defn put-all! [^IMap dest ^Map src]
   (.putAll dest src))
 
+(defn remove! [^IMap m k]
+  (.remove m k))
+
+(defn delete! [^IMap m k]
+  (.delete m k))
+
 (defn add-index 
   ([^IMap m index]
    (add-index m index false))
