@@ -24,11 +24,11 @@
   ([conf]
     (Hazelcast/getOrCreateHazelcastInstance conf)))
 
-(defn client-config [{:keys [ips retry-ms retry-max]}]
+(defn client-config [{:keys [hosts retry-ms retry-max]}]
   (let [config (ClientConfig.)]
     (doto config 
       (.getNetworkConfig)
-      (.addAddress (into-array ips))
+      (.addAddress (into-array hosts))
       (.setConnectionAttemptPeriod retry-ms)
       (.setConnectionAttemptLimit retry-max))
     config))
@@ -41,7 +41,7 @@
 (defonce 
   ;; "will only be used if no config is provided"
   default-client-config
-  {:ips ["127.0.0.1"]
+  {:hosts ["127.0.0.1"]
    :retry-ms 5000
    :retry-max 720000})                        ;; 720000 * 5000 = one hour
 
