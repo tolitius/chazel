@@ -6,7 +6,7 @@
 
   :source-paths ["src" "src/chazel"]
 
-  :profiles {:dev {:jvm-opts ["-Dconf=resources/config.edn"]}}
+  :profiles {:dev {:repl-options {:init-ns chazel}}}
 
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [cprop "0.1.0-SNAPSHOT"]

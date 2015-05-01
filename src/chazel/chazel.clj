@@ -1,6 +1,5 @@
 (ns chazel
   (:require [wall.hack :refer [field]]
-            [cprop :refer [conf]]
             [clojure.tools.logging :refer [warn]])
   (:import [java.util Collection Map]
            [com.hazelcast.core Hazelcast IMap]
@@ -25,33 +24,40 @@
   ([conf]
     (Hazelcast/getOrCreateHazelcastInstance conf)))
 
-(def client-config
-  (delay
-    (let [config (ClientConfig.)]
-      (doto config 
-        (.getNetworkConfig)
-        (.addAddress (into-array (conf :hz-client :addresses)))
-        (.setConnectionAttemptPeriod (conf :hz-client :time-between-connection-retries-ms))
-        (.setConnectionAttemptLimit (conf :hz-client :retry-max)))
-      config)))
-
-(def c-instance
-  (delay (atom (HazelcastClient/newHazelcastClient @client-config))))
+(defn client-config [{:keys [ips retry-ms retry-max]}]
+  (let [config (ClientConfig.)]
+    (doto config 
+      (.getNetworkConfig)
+      (.addAddress (into-array ips))
+      (.setConnectionAttemptPeriod retry-ms)
+      (.setConnectionAttemptLimit retry-max))
+    config))
 
 (defn instance-active? [instance]
   (-> instance
       (.getLifecycleService)
       (.isRunning)))
 
-(defn client-instance []
-  (let [ci @@c-instance]
-    (if (instance-active? ci)
-      ci
-      (try
-        (reset! @c-instance
-                (HazelcastClient/newHazelcastClient @client-config))
-        (catch Throwable t
-               (warn "could not create hazelcast a client instance: " (.getMessage t)))))))
+(defonce 
+  ;; "will only be used if no config is provided"
+  default-client-config
+  {:ips ["127.0.0.1"]
+   :retry-ms 5000
+   :retry-max 720000})                        ;; 720000 * 5000 = one hour
+
+(defonce c-instance (atom nil))
+
+(defn client-instance 
+  ([] (client-instance default-client-config))
+  ([conf]
+    (let [ci @c-instance]
+      (if (and ci (instance-active? ci))
+        ci
+        (try
+          (reset! c-instance
+                  (HazelcastClient/newHazelcastClient (client-config conf)))
+          (catch Throwable t
+            (warn "could not create hazelcast a client instance: " t)))))))
 
 ;; creates a demo cluster
 (defn cluster-of [nodes & {:keys [conf]}]
