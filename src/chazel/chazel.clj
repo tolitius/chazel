@@ -1,6 +1,6 @@
 (ns chazel
   (:require [wall.hack :refer [field]]
-            [clojure.tools.logging :refer [warn]])
+            [clojure.tools.logging :refer [warn info]])
   (:import [java.util Collection Map]
            [com.hazelcast.core Hazelcast IMap]
            [com.hazelcast.query SqlPredicate]
@@ -50,6 +50,7 @@
 (defn client-instance 
   ([] (client-instance default-client-config))
   ([conf]
+    (info "connecting to: " conf)
     (let [ci @c-instance]
       (if (and ci (instance-active? ci))
         ci
