@@ -11,6 +11,6 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [cprop "0.1.0-SNAPSHOT"]
                  [org.clojure/tools.logging "0.3.1"]
-                 [com.hazelcast/hazelcast "3.4.2"]
-                 [com.hazelcast/hazelcast-client "3.4.2"]
+                 [com.hazelcast/hazelcast "3.5-EA"]
+                 [com.hazelcast/hazelcast-client "3.5-EA"]
                  [clj-wallhack "1.0.1"]])
