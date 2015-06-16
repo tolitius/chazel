@@ -7,6 +7,7 @@
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
+           [com.hazelcast.config GroupConfig]
            [com.hazelcast.instance HazelcastInstanceProxy]))
 
 (defn new-instance 
@@ -24,13 +25,15 @@
   ([conf]
     (Hazelcast/getOrCreateHazelcastInstance conf)))
 
-(defn client-config [{:keys [hosts retry-ms retry-max]}]
-  (let [config (ClientConfig.)]
+(defn client-config [{:keys [hosts retry-ms retry-max group-name group-password]}]
+  (let [config (ClientConfig.)
+        groupConfig (GroupConfig. group-name group-password)]
     (doto config 
       (.getNetworkConfig)
       (.addAddress (into-array hosts))
       (.setConnectionAttemptPeriod retry-ms)
       (.setConnectionAttemptLimit retry-max))
+      (.setGroupConfig config groupConfig)
     config))
 
 (defn instance-active? [instance]
@@ -43,7 +46,9 @@
   default-client-config
   {:hosts ["127.0.0.1"]
    :retry-ms 5000
-   :retry-max 720000})                        ;; 720000 * 5000 = one hour
+   :retry-max 720000
+   :group-name "dev"
+   :group-password "dev-pass"})                        ;; 720000 * 5000 = one hour
 
 (defonce c-instance (atom nil))
 
