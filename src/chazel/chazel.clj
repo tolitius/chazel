@@ -128,9 +128,9 @@
   ([^IMap m k v]
     (.put m k v)))
 
-(defn get 
+(defn cget 
   ([^IMap m k f]
-    (f (get m k)))
+    (f (cget m k)))
   ([^IMap m k]
     (.get m k)))
 

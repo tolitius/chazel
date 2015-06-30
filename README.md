@@ -98,17 +98,17 @@ user=>
 notice `transit-out`, it is an optional function to `put!` that will be applied to the value before the hazelcast `.put` is called. In this case a value will be serialized with transit.
 
 ```clojure
-user=> (get m "bids")
+user=> (cget m "bids")
 #<byte[] [B@638b6eec>
 ```
 
-a default chazel's `get` will return the value the way hazelcast has it stored: as a byte array. Similarly to `put!`, `get` also takes in an optional function that is applied after the value is fetched from hazelcast:
+a default chazel's `cget` will return the value the way hazelcast has it stored: as a byte array. Similarly to `put!`, `cget` also takes in an optional function that is applied after the value is fetched from hazelcast:
 
 ```clojure
-user=> (get m "bids" transit-in)
+user=> (cget m "bids" transit-in)
 {:opening [429 431 430 429], :nbbo [428 430 429 427]}
 
-user=> (type (get m "bids" transit-in))
+user=> (type (cget m "bids" transit-in))
 clojure.lang.PersistentArrayMap
 ```
 
