@@ -122,8 +122,17 @@
     (when instance
       (.shutdown instance))))
 
-(defn put! [^IMap m k v]
-  (.put m k v))
+(defn put! 
+  ([^IMap m k v f]
+    (put! m k (f v)))
+  ([^IMap m k v]
+    (.put m k v)))
+
+(defn get 
+  ([^IMap m k f]
+    (f (get m k)))
+  ([^IMap m k]
+    (.get m k)))
 
 (defn put-all! [^IMap dest ^Map src]
   (.putAll dest src))

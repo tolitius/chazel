@@ -58,6 +58,36 @@ user=> (find-all-maps (hz-instance))
  {:goog 42})
 ```
 
+### Serialization
+
+To start off chazel has [transit](https://github.com/cognitect/transit-clj) seriailzer ready to go:
+
+```clojure
+user=> (require '[chazel.serializer :refer [transit-in transit-out]])
+user=> (def m (hz-map "amzn"))
+
+user=> (put! m "bids" {:opening [429 431 430 429] :nbbo [428 430 429 427]} transit-out)
+#<byte[] [B@5d9d8664>
+user=>
+```
+notice `transit-out`, it is an optional function to `put!` that will be applied to the value before the hazelcast put is called. In this case a value will be serialized with transit.
+
+```clojure
+user=> (get m "bids")
+#<byte[] [B@638b6eec>
+
+a default chazel's `get` will return the value the way it has it stored: byte array. Similarly to `put!` `get` also takes in an optional function that is applied after the value is fetched from hazelcast:
+
+user=> (get m "bids" transit-in)
+{:opening [429 431 430 429], :nbbo [428 430 429 427]}
+
+user=> (type (get m "bids" transit-in))
+clojure.lang.PersistentArrayMap
+```
+
+Serialization is a big deal when the nodes are distributed, or when you connect to a remote hazelcast cluster. chazel solves this problem delegating it to an optional serializer.
+In case you need to use a different serializer, you can either send a pull request updating a `chazel.serializer` file, or specify your own secret serialize function in `put!` and `get`.
+
 ## License
 
 Copyright © 2015 tolitius
