@@ -112,7 +112,7 @@ user=> (type (cget m "bids" transit-in))
 clojure.lang.PersistentArrayMap
 ```
 
-In case you need to use a different serializer, you can either send a pull request updating [chazel.serializer](https://github.com/tolitius/chazel/blob/master/src/chazel/serializer.clj), or by specifying your own "secret" serialize function in `put!` and `get`.
+In case you need to use a different serializer, you can either send a pull request updating [chazel.serializer](https://github.com/tolitius/chazel/blob/master/src/chazel/serializer.clj), or by specifying your own "secret" serialize function in `put!` and `cget`.
 
 ## License
 
