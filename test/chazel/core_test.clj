@@ -1,6 +1,6 @@
 (ns chazel.core-test
   (:require [clojure.test :refer :all]
-            [chazel.core :refer :all]))
+            [chazel :refer :all]))
 
 (deftest a-test
   (testing "FIXME, I fail."

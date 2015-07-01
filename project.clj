@@ -9,7 +9,7 @@
   :profiles {:dev {:repl-options {:init-ns chazel}}}
 
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [cprop "0.1.1-SNAPSHOT"]
+                 [cprop "0.1.1"]
                  [org.clojure/tools.logging "0.3.1"]
                  [com.hazelcast/hazelcast "3.4.2"]
                  [com.hazelcast/hazelcast-client "3.4.2"]
