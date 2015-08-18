@@ -55,11 +55,11 @@
 (defn client-instance 
   ([] (client-instance default-client-config))
   ([conf]
-    (info "connecting to: " conf)
     (let [ci @c-instance]
       (if (and ci (instance-active? ci))
         ci
         (try
+          (info "connecting to: " conf)
           (reset! c-instance
                   (HazelcastClient/newHazelcastClient (client-config conf)))
           (catch Throwable t
