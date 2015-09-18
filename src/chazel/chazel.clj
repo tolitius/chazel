@@ -117,6 +117,9 @@
     HazelcastClientProxy (field HazelcastClientProxy :client p)
     p))
 
+(defn shutdown-client [instance]
+  (HazelcastClient/shutdown instance))
+
 (defn shutdown []
   (let [instance (hz-instance)]
     (when instance
