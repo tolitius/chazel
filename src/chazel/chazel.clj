@@ -2,12 +2,15 @@
   (:require [wall.hack :refer [field]]
             [clojure.tools.logging :refer [warn info]])
   (:import [java.util Collection Map]
-           [com.hazelcast.core Hazelcast IMap]
+           [com.hazelcast.core Hazelcast IMap EntryEvent]
            [com.hazelcast.query SqlPredicate]
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
            [com.hazelcast.config GroupConfig]
+           [com.hazelcast.map.listener EntryAddedListener 
+                                       EntryRemovedListener 
+                                       EntryUpdatedListener]
            [com.hazelcast.instance HazelcastInstanceProxy]))
 
 (defn new-instance 
@@ -154,3 +157,31 @@
 
 (defn select [m where]
   (.values m (SqlPredicate. where)))
+
+(defn add-entry-listener [m ml]
+  (.addEntryListener m ml true))
+
+(defn remove-entry-listener [m listener-id]
+  (.removeEntryListener m listener-id))
+
+(defn entry-added-listener [f]
+  (when (fn? f)
+    (reify 
+      EntryAddedListener
+        (^void entryAdded [this ^EntryEvent entry]
+          (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+
+(defn entry-removed-listener [f]
+  (when (fn? f)
+    (reify 
+      EntryRemovedListener
+        (^void entryRemoved [this ^EntryEvent entry]
+          (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+
+(defn entry-updated-listener [f]
+  (when (fn? f)
+    (reify 
+      EntryUpdatedListener
+        (^void entryUpdated [this ^EntryEvent entry]
+          (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+
