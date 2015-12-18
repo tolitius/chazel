@@ -4,10 +4,24 @@ Hazelcast bells and whistles under the Clojure belt
 
 ![](https://clojars.org/chazel/latest-version.svg)
 
+- [show me](#show-me)
+  - [Connecting as a Client](#connecting-as-a-client)
+  - [Distributed Tasks](#distributed-tasks)
+    - [Sending Runnables](#sending-runnables)
+    - [Sending Callables](#sending-callables)
+    - [Task Knobs](#task-knobs)
+      - [Send to All](#send-to-all)
+      - [Instance](#instance)
+      - [Executor Service](#executor-service)
+      - [All Together](#all-together)
+  - [Event Listeners](#event-listeners)
+  - [Serialization](#serialization)
+- [License](#license)
+
 ## show me
 
 ```clojure
-user=> (use 'chazel)
+user=> (require '[chazel :refer :all])
 nil
 ```
 
@@ -58,7 +72,7 @@ user=> (find-all-maps (hz-instance))
  {:goog 42})
 ```
 
-### Connecting as a client
+### Connecting as a Client
 
 ```clojure
 user=> (def c (client-instance {:group-password "dev-pass", 
@@ -80,6 +94,195 @@ WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 1
 WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 2 of 720000.
 ...
 ```
+
+### Distributed Tasks
+
+Sending work to be done remotely on the cluster is very useful, and Hazelcast has a [rich set of APIs](http://docs.hazelcast.org/docs/3.5/javadoc/com/hazelcast/core/IExecutorService.html) to do so.
+
+chazel does not implement all the APIs, but it does provide a quite KISS method of sending task to be executed remotely on the cluster:
+
+```clojure
+(task do-work)
+```
+
+done.
+
+`task` here is chazels function, and `do-work` is your function.
+
+A couple of gotchas:
+
+* `do-work` must exist on both sending and doing work JVMs
+* in case you'd like to pass a function with arguments use `partial`
+
+```clojure
+(task (partial do-work arg1 arg2 ..))
+```
+
+#### Sending Runnables
+
+In example above `do-work` gets wrapped into a Runnable internal chazel [Task](https://github.com/tolitius/chazel/blob/6bfd0275239ea96a9240efb7abed6adaafd8ee6d/src/chazel/chazel.clj#L194)
+and gets send to the cluster to execute.
+
+say the function we are sending is:
+
+```clojure
+(defn do-work [& args]
+  (println "printing remotely..." args)
+  (str "doing work remotely with args: " args))
+```
+
+if we send it with `(task do-work)`, you'll see `printing remotely... nil` in the cluster logs of the member that picked up the task.
+But you won't see `doing the work...` since it just executed this silently on that member.
+
+#### Sending Callables
+
+In case you do want to know when the task is done, or you'd like to own the result of the tasks, you can send a task that will return you a future back.
+chazel calls this kind of task an `ftask`:
+
+```clojure
+chazel=> (ftask do-work)
+#<ClientCancellableDelegatingFuture com.hazelcast.client.util.ClientCancellableDelegatingFuture@6148ce19>
+```
+
+a tasty future has come back, so we can deref it:
+
+```clojure
+chazel=> @(ftask do-work)
+"doing work remotely with args: "
+```
+
+can also send it some args:
+
+```clojure
+chazel=> @(ftask (partial do-work 42 "forty two"))
+"doing work remotely with args: (42 \"forty two\")"
+```
+
+#### Task Knobs
+
+##### Send to All
+
+A task that is sent with `task` of `ftask` by default will be picked up by any one member to run it.
+Sometimes it is needed to send a task to be executed on all of the cluster members:
+
+```clojure
+chazel=> (ftask (partial do-work 42 "forty two") :members :all)
+{#<MemberImpl Member [192.168.1.4]:5702> #<ClientCancellableDelegatingFuture com.hazelcast.client.util.ClientCancellableDelegatingFuture@2ae5cde4>,
+ #<MemberImpl Member [192.168.1.4]:5701> #<ClientCancellableDelegatingFuture com.hazelcast.client.util.ClientCancellableDelegatingFuture@7db6db4>}
+```
+
+here we have a small local two node cluster, and what comes back is a {member future} map. Let's get all the results:
+
+```clojure
+chazel=> (def work (ftask (partial do-work 42 "forty two") :members :all))
+#'chazel/work
+
+chazel=> (into {} (for [[m f] work] [m @f]))
+{#<MemberImpl Member [192.168.1.4]:5702>
+ "doing work remotely with args: (42 \"forty two\")",
+ #<MemberImpl Member [192.168.1.4]:5701>
+ "doing work remotely with args: (42 \"forty two\")"}
+```
+
+##### Instance
+
+By default chazel will look for a client instance, if it is active, it will use that, if not it will get a server instance instead.
+But in case you'd like to use a concrete instance in order to send out tasks from you can:
+
+```clojure
+(task do-work :instance your-instance)
+```
+
+##### Executor Service
+
+By default chazel will use a `"default"` executor service to submit all the tasks to.
+But in case you'd like to pick a different one, you can:
+
+```clojure
+(task do-work :exec-svc-name "my-es")
+```
+
+##### All Together
+
+All the options can be used with `task` and `ftask`:
+
+```clojure
+(task do-work :instance "my instance" :exec-svc-name "my-es")
+```
+
+```clojure
+(ftask do-work :instance "my instance" :memebers :all :exec-svc-name "my-es")
+```
+
+### Event Listeners
+
+Hazelcast has map entry listeners which can be attached to a map and listen on different operations namely:
+
+* entry added
+* entry removed
+* entry updated
+
+chazel has all 3 listeners available as wrapper functions and ready to roll:
+
+* entry-added-listener
+* entry-removed-listener
+* entry-updated-listener
+
+A chazel map entry listener would take a function and apply it every time the event takes place:
+
+```clojure
+chazel=> (def m (hz-map "appl"))
+#'chazel/m
+
+chazel=> (put! m 42 1)
+
+chazel=> m
+{42 1}
+```
+
+nothing fancy, usual map business. now let's add an update listener:
+
+```clojure
+chazel=> (def ul (entry-updated-listener (fn [k v ov] (println "updated: " {:k k :v v :ov ov}))))
+#'chazel/ul
+chazel=> (def id (add-entry-listener m ul))
+#'chazel/id
+chazel=> id
+"927b9530-630c-4bbb-995f-9c74815d9ca9"
+chazel=>
+```
+
+`ov` here is an `old value` that is being updated.
+
+when the listener is added, hazelcast assigns a `uuid` to it. We'll use it a bit later. For now let's see how the listener works:
+
+```clojure
+chazel=> (put! m 42 2)
+1
+updated:  {:k 42, :v 2, :ov 1}
+chazel=>
+
+chazel=> (put! m 42 3)
+updated:  {:k 42, :v 3, :ov 2}
+2
+```
+
+now every time an entry gets updated a function we created above gets applied.
+
+since we have listener id, we can use it to remove this listener from the map:
+
+```clojure
+chazel=> (remove-entry-listener m id)
+true
+
+chazel=> (put! m 42 4)
+3
+chazel=> m
+{42 4}
+```
+
+all back to vanila, no listeners involved, map business.
+
 ### Serialization
 
 Serialization is a big deal when hazelcast nodes are distributed, or when you connect to a remote hazelcast cluster. 
