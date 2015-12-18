@@ -2,6 +2,6 @@
   (:require [clojure.test :refer :all]
             [chazel :refer :all]))
 
-(deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+(defn do-work [& args]
+  (println "printing remotely..." args)
+  (str "doing work remotely with args: " args))

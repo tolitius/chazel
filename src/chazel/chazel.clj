@@ -2,6 +2,8 @@
   (:require [wall.hack :refer [field]]
             [clojure.tools.logging :refer [warn info]])
   (:import [java.util Collection Map]
+           [java.io Serializable]
+           [java.util.concurrent Callable]
            [com.hazelcast.core Hazelcast IMap EntryEvent]
            [com.hazelcast.query SqlPredicate]
            [com.hazelcast.client HazelcastClient]
@@ -67,6 +69,10 @@
                   (HazelcastClient/newHazelcastClient (client-config conf)))
           (catch Throwable t
             (warn "could not create hazelcast a client instance: " t)))))))
+
+(defn client-instance? []
+  (let [ci @c-instance]
+    (and ci (instance-active? ci))))
 
 ;; creates a demo cluster
 (defn cluster-of [nodes & {:keys [conf]}]
@@ -185,3 +191,32 @@
         (^void entryUpdated [this ^EntryEvent entry]
           (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
 
+(deftype Task [fun]
+  Serializable
+
+  Runnable
+  (run [_] (fun))
+
+  Callable
+  (call [_] (fun)))
+
+(defn- task-args [& {:keys [members instance es-name]
+                   :or {members :any
+                        instance (if (client-instance?)
+                                  (client-instance)
+                                  (hz-instance))
+                        es-name :default}
+                   :as args}]
+  (assoc args :exec-svc (.getExecutorService instance (name es-name))))
+
+(defn task [fun & args]
+  (let [{:keys [exec-svc members]} (apply task-args args)]
+    (if (= :all members)
+      (.executeOnAllMembers exec-svc (Task. fun))
+      (.execute exec-svc (Task. fun)))))
+
+(defn ftask [fun & args]
+  (let [{:keys [exec-svc members]} (apply task-args args)]
+    (if (= :all members)
+      (.submitToAllMembers exec-svc (Task. fun))
+      (.submit exec-svc (Task. fun)))))
