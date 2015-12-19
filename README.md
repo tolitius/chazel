@@ -124,7 +124,7 @@ chazel=> (def masters {1 (Jedi. "Yoda" "vim")
                        8 (Jedi. "Jaina Solo Fel" "atom")})
 ```
 
-[Jedi](test/chazel/jedis.clj) is an example type that has `name` and `editor` fields. 
+[Jedi](test/chazel/jedis.clj#L5) is an example type that has `name` and `editor` fields. 
 
 You guessed it right, we are going to rely on SQL query powers to finally find out which editors Jedis Masters use!
 
