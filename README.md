@@ -6,6 +6,9 @@ Hazelcast bells and whistles under the Clojure belt
 
 - [Show Me](#show-me)
   - [Connecting as a Client](#connecting-as-a-client)
+  - [Distributed SQL Queries](#distributed-sql-queries)
+    - [Jedi Order](#jedi-order)
+    - [Jedi SQL](#jedi-sql)
   - [Distributed Tasks](#distributed-tasks)
     - [Sending Runnables](#sending-runnables)
     - [Sending Callables](#sending-callables)
@@ -94,6 +97,90 @@ WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 1
 WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 2 of 720000.
 ...
 ```
+
+### Distributed SQL Queries
+
+Hazelcast has a concept of [Distributed Query](http://docs.hazelcast.org/docs/3.5/manual/html/distributedquery.html) with quite rich [SQL syntax supported](http://docs.hazelcast.org/docs/3.5/manual/html/querysql.html).
+
+chazel embraces it into a single function `select`. Let's look at the example that is taught at Jedi Order.
+
+#### Jedi Order
+
+Since Hazelcast internally works with Java objects, it relies on getter/setter accessors for its full SQL power. This is not that bad as it might seem at the first glance. Think Google Protobufs, or many other Java serialization protocols, the all produce objects with getters and setters.
+
+Let's call for the Jedi Masters:
+
+```clojure
+chazel=> (require '[chazel :refer :all])
+chazel=> (import '[chazel.jedis Jedi])
+
+chazel=> (def masters {1 (Jedi. "Yoda" "vim")
+                       2 (Jedi. "Mace Windu" "emacs")
+                       3 (Jedi. "Qui-Gon Jinn" "cursive")
+                       4 (Jedi. "Obi-Wan Kenobi" "vim")
+                       5 (Jedi. "Luke Skywalker" "vim")
+                       6 (Jedi. "Mara Jade Skywalker" "emacs")
+                       7 (Jedi. "Leia Organa Solo" "emacs")
+                       8 (Jedi. "Jaina Solo Fel" "atom")})
+```
+
+[Jedi](test/chazel/jedis.clj) is an example type that has `name` and `editor` fields. 
+
+You guessed it right, we are going to rely on SQL query powers to finally find out which editors Jedis Masters use!
+
+#### Jedi SQL
+
+Now as we called upon the masters, let's put them into a Hazelcast map. We can use a `put-all!` for that:
+
+```clojure
+chazel=> (def jedis (hz-map "jedis"))
+#'chazel/jedis
+
+chazel=> (put-all! jedis masters)
+```
+
+Let's now run some _distributed_ SQL on the new Jedi Master database:
+
+```clojure
+chazel=> (select jedis "editor = vim")
+
+#{#<Jedi {:name Obi-Wan Kenobi :editor vim}> 
+  #<Jedi {:name Yoda :editor vim}> 
+  #<Jedi {:name Luke Skywalker :editor vim}>}
+```
+
+```clojure
+chazel=> (select jedis "name like %Sky%")
+
+#{#<Jedi {:name Luke Skywalker :editor vim}> 
+  #<Jedi {:name Mara Jade Skywalker :editor emacs}>}
+```
+
+```clojure
+chazel=> (select jedis "name like %Sky% and editor != emacs")
+
+#{#<Jedi {:name Luke Skywalker :editor vim}>}
+```
+
+niice!
+
+In case a database / map is large, we can add [field indices](http://docs.hazelcast.org/docs/3.5/manual/html/queryindexing.html)
+
+```clojure
+chazel=> (add-index jedis "editor")
+```
+
+now this query will run _waaay_ faster:
+
+```clojure
+chazel=> (select jedis "editor = vim"))
+
+#{#<Jedi {:name Obi-Wan Kenobi :editor vim}> 
+  #<Jedi {:name Yoda :editor vim}> 
+  #<Jedi {:name Luke Skywalker :editor vim}>}
+```
+
+for larger datasets.
 
 ### Distributed Tasks
 
