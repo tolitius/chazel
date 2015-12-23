@@ -1,6 +1,6 @@
 (ns chazel
   (:require [wall.hack :refer [field]]
-            [clojure.tools.logging :refer [warn info]])
+            [clojure.tools.logging :refer [warn info error]])
   (:import [java.util Collection Map]
            [java.io Serializable]
            [java.util.concurrent Callable]
@@ -220,3 +220,11 @@
     (if (= :all members)
       (.submitToAllMembers exec-svc (Task. fun))
       (.submit exec-svc (Task. fun)))))
+
+;; to be a bit more explicit about these tasks (their futures) problems
+;; good idea to call it before executing distributed tasks
+(defn set-default-exception-handler []
+  (Thread/setDefaultUncaughtExceptionHandler
+    (reify Thread$UncaughtExceptionHandler
+      (uncaughtException [_ thread ex]
+        (error ex "Uncaught exception on" (.getName thread))))))
