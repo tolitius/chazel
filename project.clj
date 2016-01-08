@@ -13,6 +13,6 @@
                  [org.clojure/tools.logging "0.3.1"]
                  [com.hazelcast/hazelcast "3.5.3"]
                  [com.hazelcast/hazelcast-client "3.5.3"]
-                 [org.hface/hface-client "0.1.1"]
+                 [org.hface/hface-client "0.1.2"]
                  [com.cognitect/transit-clj "0.8.275"]
                  [clj-wallhack "1.0.1"]])
