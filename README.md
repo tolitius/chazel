@@ -4,24 +4,25 @@ Hazelcast bells and whistles under the Clojure belt
 
 ![](https://clojars.org/chazel/latest-version.svg)
 
-- [Show Me](#show-me)
-  - [Connecting as a Client](#connecting-as-a-client)
-  - [Distributed SQL Queries](#distributed-sql-queries)
-    - [Jedi Order](#jedi-order)
-    - [Jedi SQL](#jedi-sql)
-  - [Distributed Tasks](#distributed-tasks)
-    - [Sending Runnables](#sending-runnables)
-    - [Sending Callables](#sending-callables)
-    - [Task Knobs](#task-knobs)
-      - [Send to All](#send-to-all)
-      - [Instance](#instance)
-      - [Executor Service](#executor-service)
-      - [All Together](#all-together)
-  - [Event Listeners](#event-listeners)
-  - [Serialization](#serialization)
+- [Creating a Cluster](#creating-a-cluster)
+- [Working with Data Structures](#working-with-data-structures)
+- [Connecting as a Client](#connecting-as-a-client)
+- [Distributed SQL Queries](#distributed-sql-queries)
+  - [Jedi Order](#jedi-order)
+  - [Jedi SQL](#jedi-sql)
+- [Distributed Tasks](#distributed-tasks)
+  - [Sending Runnables](#sending-runnables)
+  - [Sending Callables](#sending-callables)
+  - [Task Knobs](#task-knobs)
+    - [Send to All](#send-to-all)
+    - [Instance](#instance)
+    - [Executor Service](#executor-service)
+    - [All Together](#all-together)
+- [Event Listeners](#event-listeners)
+- [Serialization](#serialization)
 - [License](#license)
 
-## Show Me
+## Creating a Cluster
 
 ```clojure
 user=> (require '[chazel :refer :all])
@@ -42,6 +43,8 @@ Members [3] {
 }
 (#<HazelcastInstanceProxy HazelcastInstance{name='_hzInstance_1_dev', node=Address[10.36.124.50]:5701}> #<HazelcastInstanceProxy HazelcastInstance{name='_hzInstance_2_dev', node=Address[10.36.124.50]:5702}> #<HazelcastInstanceProxy HazelcastInstance{name='_hzInstance_3_dev', node=Address[10.36.124.50]:5703}>)
 ```
+
+## Working with Data Structures
 
 create a map (or multimap, or queue, etc):
 
@@ -75,7 +78,7 @@ user=> (find-all-maps (hz-instance))
  {:goog 42})
 ```
 
-### Connecting as a Client
+## Connecting as a Client
 
 ```clojure
 user=> (def c (client-instance {:group-password "dev-pass", 
@@ -98,13 +101,13 @@ WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 2
 ...
 ```
 
-### Distributed SQL Queries
+## Distributed SQL Queries
 
 Hazelcast has a concept of [Distributed Query](http://docs.hazelcast.org/docs/3.5/manual/html/distributedquery.html) with quite rich [SQL syntax supported](http://docs.hazelcast.org/docs/3.5/manual/html/querysql.html).
 
 chazel embraces it into a single function `select`. Let's look at the example that is taught at Jedi Order.
 
-#### Jedi Order
+### Jedi Order
 
 Since Hazelcast internally works with Java objects, it relies on getter/setter accessors for its full SQL power. This is not that bad as it might seem at the first glance. Think Google Protobufs, or many other Java serialization protocols, the all produce objects with getters and setters.
 
@@ -128,7 +131,7 @@ chazel=> (def masters {1 (Jedi. "Yoda" "vim")
 
 You guessed it right, we are going to rely on SQL query powers to finally find out which editors Jedis Masters use!
 
-#### Jedi SQL
+### Jedi SQL
 
 Now as we called upon the masters, let's put them into a Hazelcast map. We can use a `put-all!` for that:
 
@@ -182,7 +185,7 @@ chazel=> (select jedis "editor = vim"))
 
 for larger datasets.
 
-### Distributed Tasks
+## Distributed Tasks
 
 Sending work to be done remotely on the cluster is very useful, and Hazelcast has a [rich set of APIs](http://docs.hazelcast.org/docs/3.5/javadoc/com/hazelcast/core/IExecutorService.html) to do that.
 
@@ -205,7 +208,7 @@ A couple of gotchas:
 (task (partial do-work arg1 arg2 ..))
 ```
 
-#### Sending Runnables
+### Sending Runnables
 
 In example above `do-work` gets wrapped into a Runnable internal chazel [Task](https://github.com/tolitius/chazel/blob/6bfd0275239ea96a9240efb7abed6adaafd8ee6d/src/chazel/chazel.clj#L194)
 and gets send to the cluster to execute.
@@ -221,7 +224,7 @@ Say the function we are sending is:
 If we send it with `(task do-work)`, you'll see `printing remotely... nil` in logs of a cluster member that picked up this task.
 But you won't see `doing the work...` since it was silently executed on that member.
 
-#### Sending Callables
+### Sending Callables
 
 In case you do want to know when the task is done, or you'd like to own the result of the tasks, you can send a task that will return you a future back.
 chazel calls this kind of task an `ftask`:
@@ -245,9 +248,9 @@ chazel=> @(ftask (partial do-work 42 "forty two"))
 "doing work remotely with args: (42 \"forty two\")"
 ```
 
-#### Task Knobs
+### Task Knobs
 
-##### Send to All
+#### Send to All
 
 A task that is sent with `task` of `ftask` by default will be picked up by any one member to run it.
 Sometimes it is needed to send a task to be executed on all of the cluster members:
@@ -271,7 +274,7 @@ chazel=> (into {} (for [[m f] work] [m @f]))
  "doing work remotely with args: (42 \"forty two\")"}
 ```
 
-##### Instance
+#### Instance
 
 By default chazel will look for a client instance, if it is active, it will use that, if not it will get a server instance instead.
 But in case you'd like to use a concrete instance in order to send out tasks from you can:
@@ -280,7 +283,7 @@ But in case you'd like to use a concrete instance in order to send out tasks fro
 (task do-work :instance your-instance)
 ```
 
-##### Executor Service
+#### Executor Service
 
 By default chazel will use a `"default"` executor service to submit all the tasks to.
 But in case you'd like to pick a different one, you can:
@@ -289,7 +292,7 @@ But in case you'd like to pick a different one, you can:
 (task do-work :exec-svc-name "my-es")
 ```
 
-##### All Together
+#### All Together
 
 All the options can be used with `task` and `ftask`:
 
@@ -301,7 +304,7 @@ All the options can be used with `task` and `ftask`:
 (ftask do-work :instance "my instance" :memebers :all :exec-svc-name "my-es")
 ```
 
-### Event Listeners
+## Event Listeners
 
 Hazelcast has map entry listeners which can be attached to maps and listen on different operations, namely:
 
@@ -370,7 +373,7 @@ chazel=> m
 
 all back to vanilla, no listeners involved, map business.
 
-### Serialization
+## Serialization
 
 Serialization is a big deal when hazelcast nodes are distributed, or when you connect to a remote hazelcast cluster. 
 chazel solves this problem by delegating it to an optional serializer.
