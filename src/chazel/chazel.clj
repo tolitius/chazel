@@ -4,7 +4,8 @@
   (:import [java.util Collection Map]
            [java.io Serializable]
            [java.util.concurrent Callable]
-           [com.hazelcast.core Hazelcast IMap EntryEvent]
+           [com.hazelcast.core Hazelcast IMap EntryEvent ITopic Message MessageListener]
+           [com.hazelcast.topic ReliableMessageListener]
            [com.hazelcast.query SqlPredicate]
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl HazelcastClientProxy]
@@ -119,6 +120,63 @@
     (hz-queue (name m) (hz-instance)))
   ([m instance]
     (.getQueue instance (name m))))
+
+(defn ^ITopic hz-reliable-topic
+  ([t]
+    (hz-reliable-topic (name t) (hz-instance)))
+  ([t instance]
+    (.getReliableTopic instance (name t))))
+
+(defn message-listener [f]
+  (when (fn? f)
+    (reify 
+      MessageListener
+        (^void onMessage [this ^Message msg]
+          (f (.getMessageObject msg))))))     ;; TODO: {:msg :member :timestamp}
+
+(defn reliable-message-listener [f {:keys [start-from store-seq loss-tolerant? terminal?]
+                                    :or {start-from -1 store-seq identity loss-tolerant? false terminal? true}}]
+  (when (fn? f)
+    (reify 
+      ReliableMessageListener
+        (^long retrieveInitialSequence [this] start-from)
+        (^void storeSequence [this ^long sq] (store-seq sq))
+        (^boolean isLossTolerant [this] loss-tolerant?)
+        (^boolean isTerminal [this ^Throwable failure] 
+          (throw failure)
+          terminal?)
+      MessageListener
+        (^void onMessage [this ^Message msg]
+          (f (.getMessageObject msg))))))     ;; TODO: {:msg :member :timestamp}
+
+(defprotocol Topic
+  (add-message-listener [t f])
+  (remove-message-listener [t id])
+  (publish [t msg])
+  (local-stats [t])
+  (hz-name [t]))
+
+(defprotocol ReliableTopic
+  (add-reliable-listener [t f opts]))
+
+;; reason for both "add-message-listener" and "add-reliable-listener": http://dev.clojure.org/jira/browse/CLJ-1024
+;; i.e. can't do: "(add-message-listener t f & opts)" in protocol
+
+(extend-type com.hazelcast.topic.impl.reliable.ReliableTopicProxy
+  ReliableTopic
+  (add-reliable-listener [t f opts]
+    (.addMessageListener t (reliable-message-listener f opts)))
+  Topic
+  (add-message-listener [t f]
+    (.addMessageListener t (message-listener f)))
+  (remove-message-listener [t id]
+    (.removeMessageListener t id))
+  (publish [t msg]
+    (.publish t msg))
+  (local-stats [t]
+    (.getLocalTopicStats t))
+  (hz-name [t]
+    (.getName t)))
 
 (defn proxy-to-instance [p]
   (condp instance? p

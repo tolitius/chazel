@@ -6,7 +6,8 @@
 
   :source-paths ["src" "src/chazel"]
 
-  :profiles {:dev {:repl-options {:init-ns chazel}}}
+  :profiles {:dev {:repl-options {:init-ns chazel}
+                   :resource-paths ["dev-resources"]}}
 
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [cprop "0.1.1"]

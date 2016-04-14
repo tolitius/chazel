@@ -18,7 +18,9 @@ Hazelcast bells and whistles under the Clojure belt
     - [Instance](#instance)
     - [Executor Service](#executor-service)
     - [All Together](#all-together)
-- [Event Listeners](#event-listeners)
+- [Reliable Topic](#reliable-topic)
+  - [Replaying Events](#replaying-events)
+- [Map Event Listeners](#map-event-listeners)
 - [Serialization](#serialization)
 - [License](#license)
 
@@ -304,7 +306,111 @@ All the options can be used with `task` and `ftask`:
 (ftask do-work :instance "my instance" :memebers :all :exec-svc-name "my-es")
 ```
 
-## Event Listeners
+## Reliable Topic
+
+Hazelcast's Reliable Topic is backed by a [Ringbuffer](http://blog.hazelcast.com/ringbuffer-data-structure/) which amongst other benefits (i.e. not destructive operations, ttl, batching, etc.) sequences all the messages, which allows for an interesting replay use cases.
+
+Let's say we have a system that publishes payments. We can send these payments to a reliable topic, and have some consumers that would be responsible to process these payments. So let's create this reliable topic:
+
+```clojure
+chazel=> (def payments (hz-reliable-topic :payments))
+#'chazel/payments
+```
+
+and a simple functions that would process a single payment:
+
+```clojure
+chazel=> (defn process-payment [p] (info "processing payment" p))
+#'chazel/process-payment
+```
+
+We can now add this function as one of the topic listeners by calling `add-message-listener` on the topic:
+
+```clojure
+chazel=> (add-message-listener payments process-payment)
+"f3216455-f9c8-46ef-976a-cae942b15a8d"
+```
+
+This listener UUID can later be used to `remove-message-listener`.
+
+Now let's publish some payments:
+
+```clojure
+chazel=> (publish payments {:name "John" :amount 4200.42M})
+
+INFO: processing payment {:name John, :amount 4200.42M}
+
+chazel=> (publish payments {:name "Kevin" :amount 2800.28M})
+
+INFO: processing payment {:name Kevin, :amount 2800.28M}
+
+chazel=> (publish payments {:name "Jessica" :amount 3400.34M})
+
+INFO: processing payment {:name Jessica, :amount 3400.34M}
+```
+
+You can see that each payment is picked up by the listener and processed.
+
+### Replaying Events
+
+So far so good, but not much different from a regular pub/sub topic. Let's make it more interesting.
+
+Say we have some problems with payments and we need to audit every payment that was sent. With a regular topic it would be hard to do (if at all possible) since we need to audit _all_ the payments: from the past and ongoing. With Hazelcast's Reliable Topic is not an issue, since it is backed by a Ringbuffer and all the messages are sequenced, we can just ask to replay the messages from an arbitrary sequence number.
+
+First let's create a function that will do the audit work:
+
+```clojure
+chazel=> (defn audit-payment [p] (info "auditing payment" p))
+#'chazel/audit-payment
+```
+
+and add it as a _reliable_ listener:
+
+```clojure
+chazel=> (add-reliable-listener payments audit-payment {:start-from 0})
+"d274fab1-7f0f-47f9-a53a-58b35a4c68d1"
+
+INFO: auditing payment {:name John, :amount 4200.42M}
+INFO: auditing payment {:name Kevin, :amount 2800.28M}
+INFO: auditing payment {:name Jessica, :amount 3400.34M}
+```
+
+Interesting, you see what happened? All the payments starting from the sequence `0` (the very beginning) were simply replayed and audited: niice!
+
+Let's publish more payments:
+
+```clojure
+chazel=> (publish payments {:name "Rudolf" :amount 1234.56M})
+
+INFO: auditing payment {:name Rudolf, :amount 1234.56M}
+INFO: processing payment {:name Rudolf, :amount 1234.56M}
+
+chazel=> (publish payments {:name "Nancy" :amount 6543.21M})
+
+INFO: auditing payment {:name Nancy, :amount 6543.21M}
+INFO: processing payment {:name Nancy, :amount 6543.21M}
+```
+
+Now _every_ ongoing payment gets processed _and_ audited, since there are two listeners attached to a topic.
+
+Let's replay them all again, just for fun:
+
+```clojure
+chazel=> (add-reliable-listener payments audit-payment {:start-from 0})
+"e2bd4912-7ccb-48b7-8102-b31e5660f68d"
+
+INFO: auditing payment {:name John, :amount 4200.42M}
+INFO: auditing payment {:name Kevin, :amount 2800.28M}
+INFO: auditing payment {:name Jessica, :amount 3400.34M}
+INFO: auditing payment {:name Rudolf, :amount 1234.56M}
+INFO: auditing payment {:name Nancy, :amount 6543.21M}
+```
+
+niice!
+
+_there are other options that can be provided to a reliable listener: i.e. `start-from` `store-seq` `loss-tolerant?` `terminal?` if needed_
+
+## Map Event Listeners
 
 Hazelcast has map entry listeners which can be attached to maps and listen on different operations, namely:
 
