@@ -18,7 +18,7 @@ Hazelcast bells and whistles under the Clojure belt
     - [Instance](#instance)
     - [Executor Service](#executor-service)
     - [All Together](#all-together)
-- [Reliable Topic](#reliable-topic)
+- [Distributed Reliable Topic](#distributed-reliable-topic)
   - [Replaying Events](#replaying-events)
 - [Map Event Listeners](#map-event-listeners)
 - [Serialization](#serialization)
@@ -306,9 +306,14 @@ All the options can be used with `task` and `ftask`:
 (ftask do-work :instance "my instance" :memebers :all :exec-svc-name "my-es")
 ```
 
-## Reliable Topic
+<div id="reliable-topic"/>
+## Distributed Reliable Topic
 
 Hazelcast's Reliable Topic is backed by a [Ringbuffer](http://blog.hazelcast.com/ringbuffer-data-structure/) which amongst other benefits (i.e. not destructive operations, ttl, batching, etc.) sequences all the messages, which allows for an interesting replay use cases.
+
+Since this is Hazelcast, we are dealing with a cluster of nodes, and depending on `backup-count` (a.k.a. quorum) this reliable topic is well _distributed_, which means it allows for better locality as well as higher availability: i.e. cluster may lose nodes, but all the topic messages will be still there to consume.
+
+### Processing Payments
 
 Let's say we have a system that publishes payments. We can send these payments to a reliable topic, and have some consumers that would be responsible to process these payments. So let's create this reliable topic:
 
