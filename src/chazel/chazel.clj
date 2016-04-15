@@ -219,8 +219,15 @@
   ([^IMap m index ordered?]
    (.addIndex m index ordered?)))
 
-(defn select [m where]
-  (.values m (SqlPredicate. where)))
+(defn select [m where & {:keys [as]
+                         :or {as :set}}]
+  (let [pred (SqlPredicate. where)]
+    (case as
+      :set (into #{} (.values m pred))
+      :map (into {} (.entrySet m pred))
+      :native (.entrySet m pred)
+      (error (str "can't return a result of a distributed query as \"" as "\" (an unknown format you provided). "
+                  "query: \"" where "\", running on: \"" (.getName m) "\"")))))
 
 (defn add-entry-listener [m ml]
   (.addEntryListener m ml true))

@@ -10,6 +10,7 @@ Hazelcast bells and whistles under the Clojure belt
 - [Distributed SQL Queries](#distributed-sql-queries)
   - [Jedi Order](#jedi-order)
   - [Jedi SQL](#jedi-sql)
+  - [Query Results Format](#query-results-format)
 - [Distributed Tasks](#distributed-tasks)
   - [Sending Runnables](#sending-runnables)
   - [Sending Callables](#sending-callables)
@@ -186,6 +187,53 @@ chazel=> (select jedis "editor = vim"))
 ```
 
 for larger datasets.
+
+#### Query Results Format
+
+By default a distributed query will return a set:
+
+```clojure
+chazel=> (type (select jedis "editor = vim"))
+clojure.lang.PersistentHashSet
+```
+
+In case you need an actual submap: i.e. all the matching map entries (k,v pairs), just ask:
+
+```clojure
+chazel=> (select jedis "editor = vim" :as :map)
+
+{1 #object[chazel.jedis.Jedi 0x44bb1c0a "{:name Yoda :editor vim}"],
+ 4 #object[chazel.jedis.Jedi 0x4ad0c3c5 "{:name Obi-Wan Kenobi :editor vim}"],
+ 5 #object[chazel.jedis.Jedi 0x2725fbd0 "{:name Luke Skywalker :editor vim}"]}
+```
+
+```clojure
+chazel=> (type (select jedis "editor = vim" :as :map))
+clojure.lang.PersistentArrayMap
+```
+
+For a better interop, you can also ask for a Hazelcast "native" type:
+
+```clojure
+chazel=> (select jedis "editor = vim" :as :native)
+
+#{#object[java.util.AbstractMap$SimpleImmutableEntry 0x69cfa867 "1={:name Yoda :editor vim}"]
+  #object[java.util.AbstractMap$SimpleImmutableEntry 0x3b0a56f9 "4={:name Obi-Wan Kenobi :editor vim}"]
+  #object[java.util.AbstractMap$SimpleImmutableEntry 0x3b498787 "5={:name Luke Skywalker :editor vim}"]}
+```
+
+```clojure
+chazel=> (type (select jedis "editor = vim" :as :native))
+com.hazelcast.map.impl.query.QueryResultCollection
+```
+
+In case a wrong / unknown format is asked for, chazel will tell you so:
+
+```clojure
+chazel=> (select jedis "editor = vim" :as :foo)
+
+ERROR: can't return a result of a distributed query as ":foo" (an unknown format you provided). query: "editor = vim", running on: "jedis"
+```
 
 ## Distributed Tasks
 
