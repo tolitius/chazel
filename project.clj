@@ -1,4 +1,4 @@
-(defproject chazel "0.1.9"
+(defproject chazel "0.1.10-SNAPSHOT"
   :description "hazelcast bells and whistles under the clojure belt"
   :url "https://github.com/tolitius/chazel"
   :license {:name "Eclipse Public License"
