@@ -1,4 +1,4 @@
-(defproject chazel "0.1.9-SNAPSHOT"
+(defproject chazel "0.1.9"
   :description "hazelcast bells and whistles under the clojure belt"
   :url "https://github.com/tolitius/chazel"
   :license {:name "Eclipse Public License"
@@ -10,10 +10,9 @@
                    :resource-paths ["dev-resources"]}}
 
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [cprop "0.1.1"]
                  [org.clojure/tools.logging "0.3.1"]
-                 [com.hazelcast/hazelcast "3.6"]
-                 [com.hazelcast/hazelcast-client "3.6"]
-                 [org.hface/hface-client "0.1.2"]
+                 [com.hazelcast/hazelcast "3.6.2"]
+                 [com.hazelcast/hazelcast-client "3.6.2"]
+                 [org.hface/hface-client "0.1.3"]
                  [com.cognitect/transit-clj "0.8.275"]
                  [clj-wallhack "1.0.1"]])
