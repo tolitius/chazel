@@ -468,14 +468,16 @@ _there are other options that can be provided to a reliable listener: i.e. `star
 Hazelcast has map entry listeners which can be attached to maps and listen on different operations, namely:
 
 * entry added
-* entry removed
 * entry updated
+* entry removed
+* entry evicted
 
 chazel has all 3 listeners available as wrapper functions and ready to roll:
 
 * entry-added-listener
-* entry-removed-listener
 * entry-updated-listener
+* entry-removed-listener
+* entry-evicted-listener
 
 A chazel map entry listener would take a function and apply it every time the event takes place:
 

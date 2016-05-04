@@ -13,6 +13,7 @@
            [com.hazelcast.config GroupConfig]
            [com.hazelcast.map.listener EntryAddedListener 
                                        EntryRemovedListener 
+                                       EntryEvictedListener
                                        EntryUpdatedListener]
            [com.hazelcast.instance HazelcastInstanceProxy]))
 
@@ -255,6 +256,13 @@
       EntryUpdatedListener
         (^void entryUpdated [this ^EntryEvent entry]
           (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+
+(defn entry-evicted-listener [f]
+ (when (fn? f)
+   (reify
+     EntryEvictedListener
+     (^void entryEvicted [this ^EntryEvent entry]
+       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
 
 (deftype Task [fun]
   Serializable
