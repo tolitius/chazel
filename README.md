@@ -351,7 +351,7 @@ All the options can be used with `task` and `ftask`:
 ```
 
 ```clojure
-(ftask do-work :instance "my instance" :memebers :all :exec-svc-name "my-es")
+(ftask do-work :instance "my instance" :members :all :exec-svc-name "my-es")
 ```
 
 <div id="reliable-topic"/>
@@ -472,7 +472,7 @@ Hazelcast has map entry listeners which can be attached to maps and listen on di
 * entry removed
 * entry evicted
 
-chazel has all 3 listeners available as wrapper functions and ready to roll:
+chazel has all 4 listeners available as wrapper functions and ready to roll:
 
 * entry-added-listener
 * entry-updated-listener
