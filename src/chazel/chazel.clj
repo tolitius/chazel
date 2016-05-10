@@ -1,5 +1,6 @@
 (ns chazel
   (:require [wall.hack :refer [field]]
+            [cheshire.core :refer [parse-string]]
             [clojure.tools.logging :refer [warn info error]])
   (:import [java.util Collection Map]
            [java.io Serializable]
@@ -15,7 +16,8 @@
                                        EntryRemovedListener 
                                        EntryEvictedListener
                                        EntryUpdatedListener]
-           [com.hazelcast.instance HazelcastInstanceProxy]))
+           [com.hazelcast.instance HazelcastInstanceProxy]
+           [org.hface InstanceStatsTask]))
 
 (defn new-instance 
   ([] (new-instance nil))
@@ -83,9 +85,32 @@
 (defn distributed-objects [hz-instance]
   (.getDistributedObjects hz-instance))
 
-(defn find-all-maps [instance]
+(defn find-all-maps
+  ([] (find-all-maps (hz-instance)))
+  ([instance]
   (filter #(instance? com.hazelcast.core.IMap %) 
-          (distributed-objects instance)))
+          (distributed-objects instance))))
+
+(defn map-sizes 
+  ([] (map-sizes (hz-instance)))
+  ([instance]
+  (reduce (fn [m o]
+            (if (instance? com.hazelcast.core.IMap o)
+              (assoc m (.getName o) {:size (.size o)})
+              m)) {} (distributed-objects instance))))
+
+(defn cluster-stats 
+  ([] (cluster-stats (hz-instance)))
+  ([instance]
+   (try
+     (as-> instance $
+           (.getExecutorService $ "stats-exec-service")
+           (.submitToAllMembers $ (InstanceStatsTask.))
+           (for [[m f] $]
+             [(str m) (parse-string @f true)])
+           (into {} $))
+     (catch Throwable t
+       (warn "could not submit instance task via instance [" instance "]: " (.getMessage t))))))
 
 ;; adds a string kv pair to the local member of this hazelcast instance
 (defn add-member-attr [instance k v]

@@ -7,6 +7,7 @@ Hazelcast bells and whistles under the Clojure belt
 - [Creating a Cluster](#creating-a-cluster)
 - [Working with Data Structures](#working-with-data-structures)
 - [Connecting as a Client](#connecting-as-a-client)
+- [Stats](#stats)
 - [Distributed SQL Queries](#distributed-sql-queries)
   - [Jedi Order](#jedi-order)
   - [Jedi SQL](#jedi-sql)
@@ -76,7 +77,7 @@ user=> (def goog (hz-map :goog))
 
 user=> (put! goog :goog 42)
 
-user=> (find-all-maps (hz-instance))
+user=> (find-all-maps)
 ({:appl 42} 
  {:goog 42})
 ```
@@ -103,6 +104,95 @@ WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 1
 WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 2 of 720000.
 ...
 ```
+
+## Stats
+
+This is a constant area of improvement and at the moment there are 2 ways to get some stats:
+
+### Maps and Sizes
+
+First is a simplistic way to find all the maps accross the cluster with their sizes (i.e. total number of values across all nodes):
+
+```clojure
+chazel=> (def appl (hz-map "appl"))
+#'chazel/appl
+chazel=> (def goog (hz-map "goog"))
+#'chazel/goog
+
+chazel=> (map-sizes)
+{"goog" {:size 0}, "appl" {:size 0}}
+
+now let's add some values and run `(map-sizes)` again:
+
+chazel=> (doseq [n (range 2048)] (put! goog n (str n)))
+chazel=> (doseq [n (range 1024)] (put! appl n (str n)))
+
+chazel=> (map-sizes)
+{"goog" {:size 2048}, "appl" {:size 1024}}
+```
+
+not too much intel, but proves to be quite useful: you see all the existing maps (IMap distributed objects) as well as their sizes.
+
+### Cluster Stats
+
+In case you need to get _all_ stats across the cluster, there are options:
+
+* [Management Center](https://hazelcast.com/products/management-center/) that comes with hazelcast, but _you pay_ for clusters over 2 nodes
+* [hface](https://github.com/tolitius/hface) will give you all the stats with GUI, free for any number of nodes, but not as powerful as the management center
+* built in chazel `(cluster-stats)` function, but you'll have to include an [8KB dependency](https://clojars.org/org.hface/hface-client) to your cluster nodes
+which is just a callable that is able to collect node stats
+
+Here is an example of a built in `(cluster-stats)`:
+
+```clojure
+
+chazel=> (cluster-stats)
+
+{"Member [192.168.1.185]:5701 this"
+ {:master true,
+  :clusterName "dev",
+  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
+  :memberList
+  ["192.168.1.185:5701" "192.168.2.185:5702" "192.168.2.185:5703"],
+  :memberState
+  {:runtimeProps
+   {:osMemory.freePhysicalMemory 2046976000,
+    :runtime.loadedClassCount 10130,
+    ;;...
+    }}
+   :executorStats {:stats-exec-service {:creationTime 1462910619108, :pending 0, :started 4, :completed 3, :cancelled 0, :totalStartLatency 0, :totalExecutionTime 49}},
+   :multiMapStats {},
+   :topicStats {},
+   :memoryStats {:committedNativeMemory 0, :creationTime 0, :usedNativeMemory 0, :freePhysical 2046976000, :maxNativeMemory 0, :freeNativeMemory 0, :maxHeap 3817865216, :totalPhysical 17179869184, :usedHeap 985153872, :gcStats {:creationTime 0, :minorCount 17, :minorTime 198, :majorCount 2, :majorTime 314, :unknownCount 0, :unknownTime 0}, :committedHeap 1548746752},
+   :mapStats
+   {:goog
+    {:creationTime 1462910602378, :maxGetLatency 0, :maxPutLatency 2, :lastAccessTime 0, :maxRemoveLatency 0, :heapCost 238277, :totalGetLatencies 0, :numberOfOtherOperations 90, :ownedEntryMemoryCost 118788, :getCount 0, :hits 0, :backupCount 1, :totalRemoveLatencies 0, :backupEntryMemoryCost 119489, :removeCount 0, :totalPutLatencies 316, :dirtyEntryCount 0, :lastUpdateTime 1462910608301, :backupEntryCount 681, :lockedEntryCount 0, :ownedEntryCount 677, :putCount 2048, :numberOfEvents 0},
+    :appl
+    {:creationTime 1462910599320, :maxGetLatency 0, :maxPutLatency 68, :lastAccessTime 0, :maxRemoveLatency 0, :heapCost 119125, :totalGetLatencies 0, :numberOfOtherOperations 90, :ownedEntryMemoryCost 60004, :getCount 0, :hits 0, :backupCount 1, :totalRemoveLatencies 0, :backupEntryMemoryCost 59121, :removeCount 0, :totalPutLatencies 390, :dirtyEntryCount 0, :lastUpdateTime 1462910604627, :backupEntryCount 338, :lockedEntryCount 0, :ownedEntryCount 343, :putCount 1024, :numberOfEvents 0}},
+   :replicatedMapStats {},
+   :queueStats {},
+   ;; lots and lots more for this member..
+ }
+
+ "Member [192.168.2.185]:5703"
+ {:master false,
+  :clusterName "dev",
+  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
+  ;; lots and lots more for this member..
+ }
+
+ "Member [192.168.2.185]:5702"
+ {:master false,
+  :clusterName "dev",
+  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
+   ;; lots and lots more for this member..
+ }
+```
+
+`(cluster-stats)` returns a `{member stats}` map with ALL the stats available for the cluster.
+
+again in order to make it work, add a little [8KB dependency](https://clojars.org/org.hface/hface-client) to your cluster nodes, so it can collect stats
+from each node / member.
 
 ## Distributed SQL Queries
 

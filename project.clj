@@ -14,5 +14,6 @@
                  [com.hazelcast/hazelcast "3.6.2"]
                  [com.hazelcast/hazelcast-client "3.6.2"]
                  [org.hface/hface-client "0.1.3"]
+                 [cheshire "5.6.1"]
                  [com.cognitect/transit-clj "0.8.275"]
                  [clj-wallhack "1.0.1"]])
