@@ -110,7 +110,7 @@
              [(str m) (parse-string @f true)])
            (into {} $))
      (catch Throwable t
-       (warn "could not submit instance task via instance [" instance "]: " (.getMessage t))))))
+       (warn "could not submit a \"collecting stats\" task via hazelcast instance [" instance "]: " (.getMessage t))))))
 
 ;; adds a string kv pair to the local member of this hazelcast instance
 (defn add-member-attr [instance k v]
