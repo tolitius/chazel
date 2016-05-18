@@ -7,7 +7,7 @@
            [java.util.concurrent Callable]
            [com.hazelcast.core Hazelcast IMap EntryEvent ITopic Message MessageListener]
            [com.hazelcast.topic ReliableMessageListener]
-           [com.hazelcast.query SqlPredicate]
+           [com.hazelcast.query SqlPredicate PagingPredicate]
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
@@ -245,15 +245,39 @@
   ([^IMap m index ordered?]
    (.addIndex m index ordered?)))
 
-(defn select [m where & {:keys [as]
-                         :or {as :set}}]
-  (let [pred (SqlPredicate. where)]
-    (case as
-      :set (into #{} (.values m pred))
-      :map (into {} (.entrySet m pred))
-      :native (.entrySet m pred)
-      (error (str "can't return a result of a distributed query as \"" as "\" (an unknown format you provided). "
-                  "query: \"" where "\", running on: \"" (.getName m) "\"")))))
+
+
+(defn- run-query [m pred where as]
+  (case as
+    :set (into #{} (.values m pred))
+    :map (into {} (.entrySet m pred))
+    :native (.entrySet m pred)
+    (error (str "can't return a result of a distributed query as \"" as "\" (an unknown format you provided). "
+                "query: \"" where "\", running on: \"" (.getName m) "\""))))
+
+(defprotocol Pageable
+  (next-page [_]))
+
+(deftype Pages [m pred where as]
+  Pageable
+  (next-page [_]
+             (.nextPage pred)
+             (run-query m pred where as))) 
+
+;; TODO: QUERY_RESULT_SIZE_LIMIT
+(defn select [m where & {:keys [as comp-fn page-size]
+                         :or {as :set
+                              comp-fn (fn [e1 e2]
+                                        (compare (.getKey e1)
+                                                 (.getKey e2)))}}]
+  (let [sql-pred (SqlPredicate. where)
+        pred (if-not page-size
+               sql-pred
+               (PagingPredicate. sql-pred comp-fn page-size))
+        rset (run-query m pred where as)]
+    (if-not page-size
+      rset
+      {:pages (Pages. m pred where as) :results rset})))
 
 (defn add-entry-listener [m ml]
   (.addEntryListener m ml true))
