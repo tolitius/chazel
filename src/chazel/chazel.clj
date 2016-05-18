@@ -264,12 +264,20 @@
              (.nextPage pred)
              (run-query m pred where as))) 
 
+(defn comp-keys []
+  (comparator (fn [e1 e2]
+                (compare (.getKey e1)
+                         (.getKey e2)))))
+
+(defn limit
+  ([n] (limit n comp-keys))
+  ([n c]
+   (PagingPredicate. comp-keys n)))
+
 ;; TODO: QUERY_RESULT_SIZE_LIMIT
 (defn select [m where & {:keys [as comp-fn page-size]
                          :or {as :set
-                              comp-fn (fn [e1 e2]
-                                        (compare (.getKey e1)
-                                                 (.getKey e2)))}}]
+                              comp-fn comp-keys}}]
   (let [sql-pred (SqlPredicate. where)
         pred (if-not page-size
                sql-pred
