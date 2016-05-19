@@ -245,47 +245,53 @@
   ([^IMap m index ordered?]
    (.addIndex m index ordered?)))
 
-
-
-(defn- run-query [m pred where as]
+(defn- run-query [m where as pred]
   (case as
-    :set (into #{} (.values m pred))
-    :map (into {} (.entrySet m pred))
-    :native (.entrySet m pred)
+    :set (into #{} (if pred (.values m pred)
+                            (.values m)))
+    :map (into {} (if pred (.entrySet m pred)
+                           (.entrySet m)))
+    :native (if pred (.entrySet m pred)
+                     (.entrySet m))
     (error (str "can't return a result of a distributed query as \"" as "\" (an unknown format you provided). "
                 "query: \"" where "\", running on: \"" (.getName m) "\""))))
 
 (defprotocol Pageable
   (next-page [_]))
 
-(deftype Pages [m pred where as]
+;; TODO: implement Seqable, mark with Sequential
+(deftype Pages [m where as pred]
   Pageable
   (next-page [_]
              (.nextPage pred)
-             (run-query m pred where as))) 
+             (run-query m where as pred))) 
 
-(defn comp-keys []
-  (comparator (fn [e1 e2]
-                (compare (.getKey e1)
-                         (.getKey e2)))))
+(def comp-keys
+  (comparator (fn [a b]
+                (> (compare (.getKey a)
+                            (.getKey b))
+                   0))))
 
-(defn limit
-  ([n] (limit n comp-keys))
-  ([n c]
-   (PagingPredicate. comp-keys n)))
+(defn with-paging [n & {:keys [comp-fn pred]
+                        :or {comp-fn comp-keys}}]
+  (if-not pred
+    (PagingPredicate. comp-fn n)
+    (PagingPredicate. pred comp-fn n)))
 
 ;; TODO: QUERY_RESULT_SIZE_LIMIT
 (defn select [m where & {:keys [as comp-fn page-size]
                          :or {as :set
                               comp-fn comp-keys}}]
-  (let [sql-pred (SqlPredicate. where)
+  (let [sql-pred (if-not (= "*" where)
+                   (SqlPredicate. where))
         pred (if-not page-size
                sql-pred
-               (PagingPredicate. sql-pred comp-fn page-size))
-        rset (run-query m pred where as)]
+               (with-paging page-size :comp-fn comp-fn
+                                      :pred sql-pred))
+        rset (run-query m where as pred)]
     (if-not page-size
       rset
-      {:pages (Pages. m pred where as) :results rset})))
+      {:pages (Pages. m where as pred) :results rset})))
 
 (defn add-entry-listener [m ml]
   (.addEntryListener m ml true))
