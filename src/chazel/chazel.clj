@@ -357,6 +357,12 @@
       (.submitToAllMembers exec-svc (Task. fun))
       (.submit exec-svc (Task. fun)))))
 
+(defn mtake [n m]
+  (into {} (take n (hz-map m))))
+
+(defn ->mtake [n mname]                 ;; for clients
+  @(ftask (partial mtake n mname)))
+
 ;; to be a bit more explicit about these tasks (their futures) problems
 ;; good idea to call it before executing distributed tasks
 (defn set-default-exception-handler []
