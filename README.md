@@ -12,6 +12,9 @@ Hazelcast bells and whistles under the Clojure belt
   - [Jedi Order](#jedi-order)
   - [Jedi SQL](#jedi-sql)
   - [Query Results Format](#query-results-format)
+  - [Pagination, ORDER BY, LIMIT](#pagination-order-by-limit)
+    - [Paging Jedis](#paging-jedis)
+    - [Jedi Order (By)](#jedi-order-by)
 - [Distributed Tasks](#distributed-tasks)
   - [Sending Runnables](#sending-runnables)
   - [Sending Callables](#sending-callables)
@@ -324,6 +327,148 @@ chazel=> (select jedis "editor = vim" :as :foo)
 
 ERROR: can't return a result of a distributed query as ":foo" (an unknown format you provided). query: "editor = vim", running on: "jedis"
 ```
+
+### Pagination, ORDER BY, LIMIT
+
+SQL would not be too useful if we could not do things like "I only need first 100 results out of millins you have" or "sort the results by the revenue". In more SQL like speak, these two would be: `LIMIT 100` and `ORDER BY "revenue"`.
+
+Hazelcast supports both through [Paging Predicates](http://docs.hazelcast.org/docs/3.7/manual/html-single/index.html#filtering-with-paging-predicates):
+
+> _Hazelcast provides paging for defined predicates. With its PagingPredicate class, you can get a collection of keys, values, or entries page by page by filtering them with predicates and giving the size of the pages. Also, you can sort the entries by specifying comparators._
+
+Think about it as `LIMIT` and `ORDER BY` with pagination built in: i.e. once you get a resultset back you can navigate it by pages. Pretty neat :)
+
+With chazel it's just a couple of optional keys to the `select` function.
+
+#### Paging Jedis
+
+Using [Jedis Masters](#jedi-order) example from above:
+
+```clojure
+chazel=> jedis
+
+{6 #object[chazel.jedis.Jedi 0x7eb421d4 "{:name Mara Jade Skywalker :editor emacs}"],
+ 1 #object[chazel.jedis.Jedi 0x39208ed7 "{:name Yoda :editor vim}"],
+ 4 #object[chazel.jedis.Jedi 0x4f001c4f "{:name Obi-Wan Kenobi :editor vim}"],
+ 5 #object[chazel.jedis.Jedi 0x417eede1 "{:name Luke Skywalker :editor vim}"],
+ 2 #object[chazel.jedis.Jedi 0x1e9bde9b "{:name Mace Windu :editor emacs}"],
+ 8 #object[chazel.jedis.Jedi 0x2370bda9 "{:name Jaina Solo Fel :editor atom}"],
+ 3 #object[chazel.jedis.Jedi 0x6cdd2fec "{:name Qui-Gon Jinn :editor cursive}"],
+ 7 #object[chazel.jedis.Jedi 0x5a7ac673 "{:name Leia Organa Solo :editor emacs}"]}
+```
+
+Let's bring them ALL (i.e. `*`) back to the client side in pages of `3`:
+
+```clojure
+chazel=> (select jedis "*" :page-size 3)
+{:pages #object[chazel.Pages 0x58406675 "chazel.Pages@58406675"],
+ :results
+ #{#object[chazel.jedis.Jedi 0x170a94e7 "{:name Jaina Solo Fel :editor atom}"]
+   #object[chazel.jedis.Jedi 0x2b4d73f4 "{:name Leia Organa Solo :editor emacs}"]
+   #object[chazel.jedis.Jedi 0x6f1e19da "{:name Mara Jade Skywalker :editor emacs}"]}}
+```
+
+notice the `chazel.Pages` under the `:pages` key that is returned, let's use it to get the next page, and then the next page, and then the next:
+
+```clojure
+chazel=> (def paging-jedis (select jedis "*" :page-size 3))
+#'chazel/paging-jedis
+
+chazel=> (-> paging-jedis :pages next-page)
+#{#object[chazel.jedis.Jedi 0x7122e00f "{:name Obi-Wan Kenobi :editor vim}"]
+  #object[chazel.jedis.Jedi 0x599d002f "{:name Qui-Gon Jinn :editor cursive}"]
+  #object[chazel.jedis.Jedi 0x5c4e9eda "{:name Luke Skywalker :editor vim}"]}
+
+chazel=> (-> paging-jedis :pages next-page)
+#{#object[chazel.jedis.Jedi 0x7eabb220 "{:name Yoda :editor vim}"]
+  #object[chazel.jedis.Jedi 0x422d73b3 "{:name Mace Windu :editor emacs}"]}
+
+chazel=> (-> paging-jedis :pages next-page)
+#{}
+```
+
+niice!
+
+Of course we can also _filter page results_ with Hazelcast SQL (i.e. `"editor = vim"`):
+
+```clojure
+chazel=> (select jedis "editor = vim" :page-size 2)
+{:pages #object[chazel.Pages 0x140ff895 "chazel.Pages@140ff895"],
+ :results
+ #{#object[chazel.jedis.Jedi 0x77b276a3 "{:name Luke Skywalker :editor vim}"]
+   #object[chazel.jedis.Jedi 0x562345a4 "{:name Obi-Wan Kenobi :editor vim}"]}}
+```
+
+Yoda here did not make to the first page, but it is comfortably watching Luke and Obi-Wan from the second / last page with Jedis who use `vim`:
+
+```clojure
+chazel=> (-> (select jedis "editor = vim" :page-size 2) :pages next-page)
+#{#object[chazel.jedis.Jedi 0x59e58d76 "{:name Yoda :editor vim}"]}
+```
+
+#### Jedi Order (By)
+
+A simple [Java Comparator](https://docs.oracle.com/javase/8/docs/api/java/util/Comparator.html) can be used to sort paginated results. While you can create it with a [comparator](https://clojuredocs.org/clojure.core/comparator) functoin, in most cases (as it works 99% in Clojure) a simple function will do.
+
+First, since in this example Jedis are Java Beans and the Hazelcast SQL resultset is a collection of [SimpleImmutableEntry](https://docs.oracle.com/javase/8/docs/api/java/util/AbstractMap.SimpleImmutableEntry.html)s let's create an `editor` field accessor:
+
+```clojure
+(defn jedit [m]
+  (let [jedi (.getValue m)]
+    (.getEditor jedi)))
+```
+
+which just wraps a couple of Java calls to get the value of the map entry and get the editor form the Jedi.
+
+Now let's create a "comparator" function:
+
+```clojure
+(defn by-editor [a b]
+  (compare (jedit a) (jedit b)))
+```
+
+which compares Jedis by the editor they use.
+
+Let's get those pages sorted with this comparator providing it to a `:comp-fn` optional param of `select`:
+
+```clojure
+chazel=> (select jedis "*" :page-size 4 :comp-fn by-editor)
+{:pages #object[chazel.Pages 0x544d44f3 "chazel.Pages@544d44f3"],
+ :results
+ #{#object[chazel.jedis.Jedi 0x57367fa1 "{:name Qui-Gon Jinn :editor cursive}"]
+   #object[chazel.jedis.Jedi 0x1f14b62c "{:name Mara Jade Skywalker :editor emacs}"]
+   #object[chazel.jedis.Jedi 0x3b6118af "{:name Mace Windu :editor emacs}"]
+   #object[chazel.jedis.Jedi 0x57999413 "{:name Jaina Solo Fel :editor atom}"]}}
+```
+
+Hm.. did not seem to work.
+
+Ah, remember from [Query Results Format](#query-results-format), the default resultset is a `set`, hence the order is lost. Let's try to change a format to, say, a `:map`:
+
+```clojure
+chazel=> (select jedis "*" :page-size 4 :comp-fn by-editor :as :map)
+{:pages #object[chazel.Pages 0x4e42e6e2 "chazel.Pages@4e42e6e2"],
+ :results
+ {8 #object[chazel.jedis.Jedi 0x2cc64579 "{:name Jaina Solo Fel :editor atom}"],
+  3 #object[chazel.jedis.Jedi 0x27400d5f "{:name Qui-Gon Jinn :editor cursive}"],
+  2 #object[chazel.jedis.Jedi 0x6908aeee "{:name Mace Windu :editor emacs}"],
+  6 #object[chazel.jedis.Jedi 0x56899da8 "{:name Mara Jade Skywalker :editor emacs}"]}}
+```
+
+now it's sorted, so as the page right after it:
+
+```clojure
+chazel=> (def pages (-> (select jedis "*" :page-size 4 :comp-fn by-editor :as :map) :pages))
+#'chazel/pages
+
+chazel=> (next-page pages)
+{7 #object[chazel.jedis.Jedi 0x6aa98c05 "{:name Leia Organa Solo :editor emacs}"],
+ 1 #object[chazel.jedis.Jedi 0x5d4a1841 "{:name Yoda :editor vim}"],
+ 4 #object[chazel.jedis.Jedi 0x63cd1e72 "{:name Obi-Wan Kenobi :editor vim}"],
+ 5 #object[chazel.jedis.Jedi 0x2838423b "{:name Luke Skywalker :editor vim}"]}
+```
+
+Luke Skywalker comes last in this chapter, but no worries, this is just the beginning...
 
 ## Distributed Tasks
 
