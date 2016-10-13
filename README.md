@@ -330,7 +330,7 @@ ERROR: can't return a result of a distributed query as ":foo" (an unknown format
 
 ### Pagination, ORDER BY, LIMIT
 
-SQL would not be too useful if we could not do things like "I only need first 100 results out of millins you have" or "sort the results by the revenue". In more SQL like speak, these two would be: `LIMIT 100` and `ORDER BY "revenue"`.
+SQL would not be too useful if we could not do things like "I only need first 100 results out of millions you have" or "sort the results by the revenue". In more SQL like speak, these two would be: `LIMIT 100` and `ORDER BY "revenue"`.
 
 Hazelcast supports both through [Paging Predicates](http://docs.hazelcast.org/docs/3.7/manual/html-single/index.html#filtering-with-paging-predicates):
 
