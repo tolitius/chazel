@@ -7,7 +7,8 @@
   :source-paths ["src" "src/chazel"]
 
   :profiles {:dev {:repl-options {:init-ns chazel}
-                   :resource-paths ["dev-resources"]}}
+                   :resource-paths ["dev-resources" "dev"]
+                   :aot [chazel.jedis]}}
 
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [org.clojure/tools.logging "0.3.1"]
