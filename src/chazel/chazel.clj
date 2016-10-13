@@ -272,21 +272,21 @@
                             (.getKey b))
                    0))))
 
-(defn with-paging [n & {:keys [comp-fn pred]
-                        :or {comp-fn comp-keys}}]
+(defn with-paging [n & {:keys [order-by pred]
+                        :or {order-by comp-keys}}]
   (if-not pred
-    (PagingPredicate. comp-fn n)
-    (PagingPredicate. pred comp-fn n)))
+    (PagingPredicate. order-by n)
+    (PagingPredicate. pred order-by n)))
 
 ;; TODO: QUERY_RESULT_SIZE_LIMIT
-(defn select [m where & {:keys [as comp-fn page-size]
+(defn select [m where & {:keys [as order-by page-size]
                          :or {as :set
-                              comp-fn comp-keys}}]
+                              order-by comp-keys}}]
   (let [sql-pred (if-not (= "*" where)
                    (SqlPredicate. where))
         pred (if-not page-size
                sql-pred
-               (with-paging page-size :comp-fn comp-fn
+               (with-paging page-size :order-by order-by
                                       :pred sql-pred))
         rset (run-query m where as pred)]
     (if-not page-size

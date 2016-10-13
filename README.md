@@ -429,10 +429,10 @@ Now let's create a "comparator" function:
 
 which compares Jedis by the editor they use.
 
-Let's get those pages sorted with this comparator providing it to a `:comp-fn` optional param of `select`:
+Let's get those pages sorted with this comparator providing it to a `:order-by` optional param of `select`:
 
 ```clojure
-chazel=> (select jedis "*" :page-size 4 :comp-fn by-editor)
+chazel=> (select jedis "*" :page-size 4 :order-by by-editor)
 {:pages #object[chazel.Pages 0x544d44f3 "chazel.Pages@544d44f3"],
  :results
  #{#object[chazel.jedis.Jedi 0x57367fa1 "{:name Qui-Gon Jinn :editor cursive}"]
@@ -446,7 +446,7 @@ Hm.. did not seem to work.
 Ah, remember from [Query Results Format](#query-results-format), the default resultset is a `set`, hence the order is lost. Let's try to change a format to, say, a `:map`:
 
 ```clojure
-chazel=> (select jedis "*" :page-size 4 :comp-fn by-editor :as :map)
+chazel=> (select jedis "*" :page-size 4 :order-by by-editor :as :map)
 {:pages #object[chazel.Pages 0x4e42e6e2 "chazel.Pages@4e42e6e2"],
  :results
  {8 #object[chazel.jedis.Jedi 0x2cc64579 "{:name Jaina Solo Fel :editor atom}"],
@@ -458,7 +458,7 @@ chazel=> (select jedis "*" :page-size 4 :comp-fn by-editor :as :map)
 now it's sorted, so as the page right after it:
 
 ```clojure
-chazel=> (def pages (-> (select jedis "*" :page-size 4 :comp-fn by-editor :as :map) :pages))
+chazel=> (def pages (-> (select jedis "*" :page-size 4 :order-by by-editor :as :map) :pages))
 #'chazel/pages
 
 chazel=> (next-page pages)
