@@ -1,6 +1,6 @@
 (ns chazel.core-test
   (:require [clojure.test :refer :all]
-            [chazel :refer :all]))
+            [chazel.core :refer :all]))
 
 (defn do-work [& args]
   (println "printing remotely..." args)

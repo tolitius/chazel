@@ -1,5 +1,5 @@
 (ns chazel.jedis
-  (:require [chazel :refer [hz-map add-index put-all! select]])
+  (:require [chazel.core :refer [hz-map add-index put-all! select]])
   (:import [java.io Serializable]))
 
 (defprotocol JediProtocol 

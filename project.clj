@@ -4,9 +4,9 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-  :source-paths ["src" "src/chazel"]
+  :source-paths ["src"]
 
-  :profiles {:dev {:repl-options {:init-ns chazel}
+  :profiles {:dev {:repl-options {:init-ns chazel.core}
                    :resource-paths ["dev-resources" "dev"]
                    :aot [chazel.jedis]}}
 

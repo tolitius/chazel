@@ -32,7 +32,7 @@ Hazelcast bells and whistles under the Clojure belt
 ## Creating a Cluster
 
 ```clojure
-user=> (require '[chazel :refer :all])
+user=> (require '[chazel.core :refer :all])
 nil
 ```
 
@@ -210,7 +210,7 @@ Since Hazelcast internally works with Java objects, it relies on getter/setter a
 Let's call for the Jedi Masters:
 
 ```clojure
-chazel=> (require '[chazel :refer :all])
+chazel=> (require '[chazel.core :refer :all])
 chazel=> (import '[chazel.jedis Jedi])
 
 chazel=> (def masters {1 (Jedi. "Yoda" "vim")

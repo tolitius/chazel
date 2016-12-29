@@ -1,4 +1,4 @@
-(ns chazel
+(ns chazel.core
   (:require [wall.hack :refer [field]]
             [cheshire.core :refer [parse-string]]
             [clojure.tools.logging :refer [warn info error]])
