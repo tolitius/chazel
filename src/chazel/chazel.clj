@@ -11,7 +11,7 @@
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
-           [com.hazelcast.config GroupConfig]
+           [com.hazelcast.config Config GroupConfig]
            [com.hazelcast.map.listener EntryAddedListener 
                                        EntryRemovedListener 
                                        EntryEvictedListener
@@ -33,6 +33,13 @@
          (new-instance)))
   ([conf]
     (Hazelcast/getOrCreateHazelcastInstance conf)))
+
+(defn with-creds
+  ([creds]
+   (with-creds creds (Config.)))
+  ([{:keys [group-name group-password]} config]
+   (.setGroupConfig config (GroupConfig. group-name
+                                         group-password))))
 
 (defn client-config [{:keys [hosts retry-ms retry-max group-name group-password]}]
   (let [config (ClientConfig.)

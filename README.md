@@ -272,7 +272,7 @@ chazel=> (add-index jedis "editor")
 now this query will run _waaay_ faster:
 
 ```clojure
-chazel=> (select jedis "editor = vim"))
+chazel=> (select jedis "editor = vim")
 
 #{#<Jedi {:name Obi-Wan Kenobi :editor vim}> 
   #<Jedi {:name Yoda :editor vim}> 
@@ -805,7 +805,7 @@ In case you need to use a different serializer, you can either send a pull reque
 
 ## License
 
-Copyright © 2015 tolitius
+Copyright © 2016 tolitius
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
