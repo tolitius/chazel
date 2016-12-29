@@ -12,8 +12,8 @@
                   [clj-wallhack "1.0.1"]
 
                   ;; boot clj
-                  [boot/core               "2.6.0"           :scope "provided"]
-                  [adzerk/boot-logservice  "1.0.1"           :scope "test"]
+                  [boot/core               "2.7.1"           :scope "provided"]
+                  [adzerk/boot-logservice  "1.2.0"           :scope "test"]
                   [adzerk/bootlaces        "0.1.13"          :scope "test"]])
 
 (require '[adzerk.bootlaces :refer :all]
