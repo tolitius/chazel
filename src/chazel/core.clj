@@ -68,6 +68,12 @@
 
 (defonce c-instance (atom nil))
 
+(defn secrefy [{:keys [group-name
+                       group-password] :as conf}]
+  (-> conf
+      (cond-> group-name (assoc :group-name "********")
+              group-password (assoc :group-password "********"))))
+
 (defn client-instance 
   ([] (client-instance default-client-config))
   ([conf]
@@ -75,7 +81,7 @@
       (if (and ci (instance-active? ci))
         ci
         (try
-          (info "connecting to: " conf)
+          (info "connecting to: " (secrefy conf))
           (reset! c-instance
                   (HazelcastClient/newHazelcastClient (client-config conf)))
           (catch Throwable t
