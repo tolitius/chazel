@@ -590,6 +590,7 @@ All the options can be used with `task` and `ftask`:
 ```
 
 <div id="reliable-topic"/>
+
 ## Distributed Reliable Topic
 
 Hazelcast's Reliable Topic is backed by a [Ringbuffer](http://blog.hazelcast.com/ringbuffer-data-structure/) which amongst other benefits (i.e. not destructive operations, ttl, batching, etc.) sequences all the messages, which allows for an interesting replay use cases.
