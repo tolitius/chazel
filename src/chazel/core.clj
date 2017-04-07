@@ -11,7 +11,10 @@
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
-           [com.hazelcast.config Config GroupConfig]
+           [com.hazelcast.config Config GroupConfig
+                                 InMemoryFormat
+                                 EvictionConfig EvictionPolicy EvictionConfig$MaxSizePolicy
+                                 NearCacheConfig NearCachePreloaderConfig NearCacheConfig$LocalUpdatePolicy]
            [com.hazelcast.map.listener EntryAddedListener 
                                        EntryRemovedListener 
                                        EntryEvictedListener
@@ -41,30 +44,90 @@
    (.setGroupConfig config (GroupConfig. group-name
                                          group-password))))
 
-(defn client-config [{:keys [hosts retry-ms retry-max group-name group-password]}]
+(defmacro call [m o v]
+  "calls (m o v) iff v is there"
+  `(when ~v
+     (~m ~o ~v)))
+
+(defmacro k->enum [value-of k]
+  "calls (enum/valueOf k) iff k is there"
+  `(when ~k
+     (~value-of (name ~k))))
+
+(defn eviction-config [{:keys [eviction-policy
+                               max-size-policy
+                               size]}]
+  (let [config (EvictionConfig.)
+        max-size-policy (k->enum EvictionConfig$MaxSizePolicy/valueOf
+                                 max-size-policy)
+        eviction-policy (k->enum EvictionPolicy/valueOf
+                                 eviction-policy)]
+    (call .setMaximumSizePolicy config max-size-policy)
+    (call .setEvictionPolicy config eviction-policy)
+    (call .setSize config size)
+    config))
+
+(defn preloader-config [{:keys [enabled
+                                directory
+                                store-initial-delay-seconds
+                                store-interval-seconds]}]
+  (let [config (NearCachePreloaderConfig.)]
+    (call .setEnabled config enabled)
+    (call .setDirectory config directory)
+    (call .setStoreInitialDelaySeconds config store-initial-delay-seconds)
+    (call .setStoreIntervalSeconds config store-interval-seconds)
+    config))
+
+(defn near-cache-config [{:keys [name
+                                 eviction
+                                 preloader
+                                 in-memory-format
+                                 invalidate-on-change
+                                 time-to-live-seconds
+                                 max-idle-seconds
+                                 cache-local-entries
+                                 local-update-policy]}]
+  (let [config (NearCacheConfig.)
+        eviction (when eviction (eviction-config eviction))
+        preloader (when preloader (preloader-config preloader))
+        local-update-policy (k->enum NearCacheConfig$LocalUpdatePolicy/valueOf
+                                     local-update-policy)
+        in-memory-format (k->enum InMemoryFormat/valueOf
+                                  in-memory-format)]
+    (call .setName config name)
+    (call .setEvictionConfig config eviction)
+    (call .setPreloaderConfig config preloader)
+    (call .setInMemoryFormat config in-memory-format)
+    (call .setInvalidateOnChange config invalidate-on-change)
+    (call .setTimeToLiveSeconds config time-to-live-seconds)
+    (call .setMaxIdleSeconds config max-idle-seconds)
+    (call .setLocalUpdatePolicy config local-update-policy)
+    (call .setCacheLocalEntries config cache-local-entries)
+    config))
+
+(defn client-config [{:keys [hosts retry-ms retry-max group-name group-password near-cache]
+                      :or {hosts ["127.0.0.1"]
+                           retry-ms 5000
+                           retry-max 720000
+                           group-name "dev"
+                           group-password "dev-pass"}}]
   (let [config (ClientConfig.)
-        groupConfig (GroupConfig. group-name group-password)]
+        groupConfig (GroupConfig. group-name group-password)
+        near-cache (when near-cache
+                     (near-cache-config near-cache))]
     (doto config 
       (.getNetworkConfig)
       (.addAddress (into-array hosts))
       (.setConnectionAttemptPeriod retry-ms)
       (.setConnectionAttemptLimit retry-max))
-      (.setGroupConfig config groupConfig)
+    (.setGroupConfig config groupConfig)
+    (call .addNearCacheConfig config near-cache)  ;; only set near cache config if provided
     config))
 
 (defn instance-active? [instance]
   (-> instance
       (.getLifecycleService)
       (.isRunning)))
-
-(defonce 
-  ;; "will only be used if no config is provided"
-  default-client-config
-  {:hosts ["127.0.0.1"]
-   :retry-ms 5000
-   :retry-max 720000
-   :group-name "dev"
-   :group-password "dev-pass"})                        ;; 720000 * 5000 = one hour
 
 (defonce c-instance (atom nil))
 
@@ -75,7 +138,7 @@
               group-password (assoc :group-password "********"))))
 
 (defn client-instance 
-  ([] (client-instance default-client-config))
+  ([] (client-instance {}))
   ([conf]
     (let [ci @c-instance]
       (if (and ci (instance-active? ci))
