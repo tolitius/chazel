@@ -15,9 +15,9 @@ Hazelcast bells and whistles under the Clojure belt
   - [Pagination, ORDER BY, LIMIT](#pagination-order-by-limit)
     - [Paging Jedis](#paging-jedis)
     - [Jedi Order (By)](#jedi-order-by)
-- [Near Cache]
-  - [Client Near Cache]
-  - [Server Near Cache]
+- [Near Cache](#near-cache)
+  - [Client Near Cache](#client-near-cache)
+  - [Server Near Cache](#server-near-cache)
 - [Distributed Tasks](#distributed-tasks)
   - [Sending Runnables](#sending-runnables)
   - [Sending Callables](#sending-callables)
