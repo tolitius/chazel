@@ -15,6 +15,9 @@ Hazelcast bells and whistles under the Clojure belt
   - [Pagination, ORDER BY, LIMIT](#pagination-order-by-limit)
     - [Paging Jedis](#paging-jedis)
     - [Jedi Order (By)](#jedi-order-by)
+- [Near Cache]
+  - [Client Near Cache]
+  - [Server Near Cache]
 - [Distributed Tasks](#distributed-tasks)
   - [Sending Runnables](#sending-runnables)
   - [Sending Callables](#sending-callables)
@@ -469,6 +472,119 @@ chazel=> (next-page pages)
 ```
 
 Luke Skywalker comes last in this chapter, but no worries, this is just the beginning...
+
+## Near Cache
+
+Near Cache is highly recommended for data structures that are mostly read. The idea is to bring data closer to the caller, and keep it in sync with the source.
+
+Here is from official [Near Ccache docs](http://docs.hazelcast.org/docs/latest/manual/html-single/index.html#near-cache):
+
+> Map or Cache entries in Hazelcast are partitioned across the cluster members. Hazelcast clients _do not have local data at all_. Suppose you read the key k a number of times from a Hazelcast client or k is owned by another member in your cluster. Then each `map.get(k)` or `cache.get(k)` will be a remote operation, which creates a lot of network trips. If you have a data structure that is mostly read, then you should consider creating a local Near Cache, so that reads are sped up and less network traffic is created.
+
+Near Cache can be configured on the client as well as on the server (on a particular member). The configuration can be done via XML or programmatically. `chazel` adds a conveniece of an [EDN](https://github.com/edn-format/edn) based config.
+
+For example an XML Near Cache config:
+
+```xml
+<near-cache name="myDataStructure">
+  <in-memory-format>(OBJECT|BINARY|NATIVE)</in-memory-format>
+  <invalidate-on-change>(true|false)</invalidate-on-change>
+  <time-to-live-seconds>(0..INT_MAX)</time-to-live-seconds>
+  <max-idle-seconds>(0..INT_MAX)</max-idle-seconds>
+  <eviction eviction-policy="(LRU|LFU|RANDOM|NONE)"
+            max-size-policy="(ENTRY_COUNT
+              |USED_NATIVE_MEMORY_SIZE|USED_NATIVE_MEMORY_PERCENTAGE
+              |FREE_NATIVE_MEMORY_SIZE|FREE_NATIVE_MEMORY_PERCENTAGE"
+            size="(0..INT_MAX)"/>
+  <cache-local-entries>(false|true)</cache-local-entries>
+  <local-update-policy>(INVALIDATE|CACHE_ON_UPDATE)</local-update-policy>
+  <preloader enabled="(true|false)"
+             directory="nearcache-example"
+             store-initial-delay-seconds="(0..INT_MAX)"
+             store-interval-seconds="(0..INT_MAX)"/>
+</near-cache>
+```
+
+or Java based config:
+
+```java
+EvictionConfig evictionConfig = new EvictionConfig()
+  .setMaxSizePolicy(MaxSizePolicy.ENTRY_COUNT
+    |USED_NATIVE_MEMORY_SIZE|USED_NATIVE_MEMORY_PERCENTAGE
+    |FREE_NATIVE_MEMORY_SIZE|FREE_NATIVE_MEMORY_PERCENTAGE);
+  .setEvictionPolicy(EvictionPolicy.LRU|LFU|RANDOM|NONE);
+  .setSize(0..INT_MAX);
+
+NearCachePreloaderConfig preloaderConfig = new NearCachePreloaderConfig()
+  .setEnabled(true|false)
+  .setDirectory("nearcache-example")
+  .setStoreInitialDelaySeconds(0..INT_MAX)
+  .setStoreIntervalSeconds(0..INT_MAX);
+
+NearCacheConfig nearCacheConfig = new NearCacheConfig()
+  .setName("myDataStructure")
+  .setInMemoryFormat(InMemoryFormat.BINARY|OBJECT|NATIVE)
+  .setInvalidateOnChange(true|false)
+  .setTimeToLiveSeconds(0..INT_MAX)
+  .setMaxIdleSeconds(0..INT_MAX)
+  .setEvictionConfig(evictionConfig)
+  .setCacheLocalEntries(true|false)
+  .setLocalUpdatePolicy(LocalUpdatePolicy.INVALIDATE|CACHE_ON_UPDATE)
+  .setPreloaderConfig(preloaderConfig);
+```
+
+with `chazel` would look like:
+
+```clojure
+{:in-memory-format :BINARY,
+ :invalidate-on-change true,
+ :time-to-live-seconds 300,
+ :max-idle-seconds 30,
+ :cache-local-entries true,
+ :local-update-policy :CACHE_ON_UPDATE,
+ :preloader {:enabled true,
+             :directory "nearcache-example",
+             :store-initial-delay-seconds 15,
+             :store-interval-seconds 60},
+ :eviction  {:eviction-policy :LRU,
+             :max-size-policy :ENTRY_COUNT,
+             :size 800000}}
+```
+
+### Client Near Cache
+
+On the client Near Cache can be passed via `:near-cache` key. For example:
+
+```clojure
+(client-instance {:hosts ["172.217.5.238"] :near-cache {:name "events"}})
+```
+
+would create Hazelcast client instance connected to `172.217.5.238` Hazelcast cluster with Near Cache configured for an `"events"` map.
+
+Since only `:name` is provided in this case all the other Near Cache values will be created with Hazelcast defaults.
+
+More config options can be added of course, for example:
+
+```clojure
+(client-instance {:hosts ["10.251.17.163"]
+                  :near-cache {:name "events"
+                               :time-to-live-seconds 300
+                               :eviction {:eviction-policy :LRU}}})
+```
+
+### Server Near Cache
+
+When the cluster is created, `chazel` allows to compose configurations that will be passed to it on startup:
+
+```clojure
+(cluster-of 3 :conf (->> (with-creds {:group-name "foo" :group-password "bar"})
+                         (with-near-cache {:in-memory-format :OBJECT
+                                           :local-update-policy :CACHE_ON_UPDATE
+                                           :preloader {:enabled true}}
+                                          "events")))
+```
+
+This would create a cluster of 3 nodes with credentials and Near Cache for a map called `"events"`.
 
 ## Distributed Tasks
 
