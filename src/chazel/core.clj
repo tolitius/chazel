@@ -37,21 +37,6 @@
   ([conf]
     (Hazelcast/getOrCreateHazelcastInstance conf)))
 
-(defn with-creds
-  ([creds]
-   (with-creds creds (Config.)))
-  ([{:keys [group-name group-password]} config]
-   (.setGroupConfig config (GroupConfig. group-name
-                                         group-password))))
-
-(defn with-near-cache
-  ([nc-config map-name]
-   (with-near-cache nc-config map-name (Config.)))
-  ([nc-config map-name hz-config]
-   (.setNearCacheConfig (.getMapConfig hz-config map-name)
-                        (near-cache-config nc-config))
-   hz-config))
-
 (defmacro call [m o v]
   "calls (m o v) iff v is there"
   `(when ~v
@@ -131,6 +116,21 @@
     (.setGroupConfig config groupConfig)
     (call .addNearCacheConfig config near-cache)  ;; only set near cache config if provided
     config))
+
+(defn with-creds
+  ([creds]
+   (with-creds creds (Config.)))
+  ([{:keys [group-name group-password]} config]
+   (.setGroupConfig config (GroupConfig. group-name
+                                         group-password))))
+
+(defn with-near-cache
+  ([nc-config map-name]
+   (with-near-cache nc-config map-name (Config.)))
+  ([nc-config map-name hz-config]
+   (.setNearCacheConfig (.getMapConfig hz-config map-name)
+                        (near-cache-config nc-config))
+   hz-config))
 
 (defn instance-active? [instance]
   (-> instance
