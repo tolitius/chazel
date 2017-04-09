@@ -7,7 +7,6 @@ Hazelcast bells and whistles under the Clojure belt
 - [Creating a Cluster](#creating-a-cluster)
 - [Working with Data Structures](#working-with-data-structures)
 - [Connecting as a Client](#connecting-as-a-client)
-- [Stats](#stats)
 - [Distributed SQL Queries](#distributed-sql-queries)
   - [Jedi Order](#jedi-order)
   - [Jedi SQL](#jedi-sql)
@@ -30,6 +29,7 @@ Hazelcast bells and whistles under the Clojure belt
   - [Replaying Events](#replaying-events)
 - [Map Event Listeners](#map-event-listeners)
 - [Serialization](#serialization)
+- [Stats](#stats)
 - [License](#license)
 
 ## Creating a Cluster
@@ -91,11 +91,11 @@ user=> (find-all-maps)
 ## Connecting as a Client
 
 ```clojure
-user=> (def c (client-instance {:group-password "dev-pass", 
+user=> (def c (client-instance {:group-name "dev",
+                                :group-password "dev-pass", 
                                 :hosts ["127.0.0.1"], 
                                 :retry-ms 5000, 
-                                :retry-max 720000, 
-                                :group-name "dev"}))
+                                :retry-max 720000}))
                                 
 INFO: connecting to:  {:group-password dev-pass, :hosts [127.0.0.1], :retry-ms 5000, :retry-max 720000, :group-name dev}
 
@@ -110,95 +110,6 @@ WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 1
 WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 2 of 720000.
 ...
 ```
-
-## Stats
-
-This is a constant area of improvement and at the moment there are 2 ways to get some stats:
-
-### Maps and Sizes
-
-First is a simplistic way to find all the maps accross the cluster with their sizes (i.e. total number of values across all nodes):
-
-```clojure
-chazel=> (def appl (hz-map "appl"))
-#'chazel/appl
-chazel=> (def goog (hz-map "goog"))
-#'chazel/goog
-
-chazel=> (map-sizes)
-{"goog" {:size 0}, "appl" {:size 0}}
-
-now let's add some values and run `(map-sizes)` again:
-
-chazel=> (doseq [n (range 2048)] (put! goog n (str n)))
-chazel=> (doseq [n (range 1024)] (put! appl n (str n)))
-
-chazel=> (map-sizes)
-{"goog" {:size 2048}, "appl" {:size 1024}}
-```
-
-not too much intel, but proves to be quite useful: you see all the existing maps (IMap distributed objects) as well as their sizes.
-
-### Cluster Stats
-
-In case you need to get _all_ stats across the cluster, there are options:
-
-* [Management Center](https://hazelcast.com/products/management-center/) that comes with hazelcast, but _you pay_ for clusters over 2 nodes
-* [hface](https://github.com/tolitius/hface) will give you all the stats with GUI, free for any number of nodes, but not as powerful as the management center
-* built in chazel `(cluster-stats)` function, but you'll have to include an [8KB dependency](https://clojars.org/org.hface/hface-client) to your cluster nodes
-which is just a callable that is able to collect node stats
-
-Here is an example of a built in `(cluster-stats)`:
-
-```clojure
-
-chazel=> (cluster-stats)
-
-{"Member [192.168.1.185]:5701 this"
- {:master true,
-  :clusterName "dev",
-  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
-  :memberList
-  ["192.168.1.185:5701" "192.168.2.185:5702" "192.168.2.185:5703"],
-  :memberState
-  {:runtimeProps
-   {:osMemory.freePhysicalMemory 2046976000,
-    :runtime.loadedClassCount 10130,
-    ;;...
-    }}
-   :executorStats {:stats-exec-service {:creationTime 1462910619108, :pending 0, :started 4, :completed 3, :cancelled 0, :totalStartLatency 0, :totalExecutionTime 49}},
-   :multiMapStats {},
-   :topicStats {},
-   :memoryStats {:committedNativeMemory 0, :creationTime 0, :usedNativeMemory 0, :freePhysical 2046976000, :maxNativeMemory 0, :freeNativeMemory 0, :maxHeap 3817865216, :totalPhysical 17179869184, :usedHeap 985153872, :gcStats {:creationTime 0, :minorCount 17, :minorTime 198, :majorCount 2, :majorTime 314, :unknownCount 0, :unknownTime 0}, :committedHeap 1548746752},
-   :mapStats
-   {:goog
-    {:creationTime 1462910602378, :maxGetLatency 0, :maxPutLatency 2, :lastAccessTime 0, :maxRemoveLatency 0, :heapCost 238277, :totalGetLatencies 0, :numberOfOtherOperations 90, :ownedEntryMemoryCost 118788, :getCount 0, :hits 0, :backupCount 1, :totalRemoveLatencies 0, :backupEntryMemoryCost 119489, :removeCount 0, :totalPutLatencies 316, :dirtyEntryCount 0, :lastUpdateTime 1462910608301, :backupEntryCount 681, :lockedEntryCount 0, :ownedEntryCount 677, :putCount 2048, :numberOfEvents 0},
-    :appl
-    {:creationTime 1462910599320, :maxGetLatency 0, :maxPutLatency 68, :lastAccessTime 0, :maxRemoveLatency 0, :heapCost 119125, :totalGetLatencies 0, :numberOfOtherOperations 90, :ownedEntryMemoryCost 60004, :getCount 0, :hits 0, :backupCount 1, :totalRemoveLatencies 0, :backupEntryMemoryCost 59121, :removeCount 0, :totalPutLatencies 390, :dirtyEntryCount 0, :lastUpdateTime 1462910604627, :backupEntryCount 338, :lockedEntryCount 0, :ownedEntryCount 343, :putCount 1024, :numberOfEvents 0}},
-   :replicatedMapStats {},
-   :queueStats {},
-   ;; lots and lots more for this member..
- }
-
- "Member [192.168.2.185]:5703"
- {:master false,
-  :clusterName "dev",
-  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
-  ;; lots and lots more for this member..
- }
-
- "Member [192.168.2.185]:5702"
- {:master false,
-  :clusterName "dev",
-  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
-   ;; lots and lots more for this member..
- }
-```
-
-`(cluster-stats)` returns a `{member stats}` map with ALL the stats available for the cluster.
-
-again in order to make it work, add a little [8KB dependency](https://clojars.org/org.hface/hface-client) to your cluster nodes, so it can collect stats
-from each node / member.
 
 ## Distributed SQL Queries
 
@@ -477,7 +388,7 @@ Luke Skywalker comes last in this chapter, but no worries, this is just the begi
 
 Near Cache is highly recommended for data structures that are mostly read. The idea is to bring data closer to the caller, and keep it in sync with the source.
 
-Here is from official [Near Ccache docs](http://docs.hazelcast.org/docs/latest/manual/html-single/index.html#near-cache):
+Here is from the official [Near Cache docs](http://docs.hazelcast.org/docs/latest/manual/html-single/index.html#near-cache):
 
 > Map or Cache entries in Hazelcast are partitioned across the cluster members. Hazelcast clients _do not have local data at all_. Suppose you read the key k a number of times from a Hazelcast client or k is owned by another member in your cluster. Then each `map.get(k)` or `cache.get(k)` will be a remote operation, which creates a lot of network trips. If you have a data structure that is mostly read, then you should consider creating a local Near Cache, so that reads are sped up and less network traffic is created.
 
@@ -505,7 +416,7 @@ For example an XML Near Cache config:
 </near-cache>
 ```
 
-or Java based config:
+or a Java based config:
 
 ```java
 EvictionConfig evictionConfig = new EvictionConfig()
@@ -551,22 +462,34 @@ with `chazel` would look like:
              :size 800000}}
 ```
 
+and can be passed directly to the client or server Hazelcast instance.
+
 ### Client Near Cache
 
-On the client Near Cache can be passed via `:near-cache` key. For example:
+On the client Near Cache can be passed via a `:near-cache` key. For example:
 
 ```clojure
-(client-instance {:hosts ["172.217.5.238"] :near-cache {:name "events"}})
+(client-instance {:near-cache {:name "events"}})
 ```
 
-would create Hazelcast client instance connected to `172.217.5.238` Hazelcast cluster with Near Cache configured for an `"events"` map.
+would create a Hazelcast client instance with Near Cache configured for a map named `"events"`.
 
 Since only `:name` is provided in this case all the other Near Cache values will be created with Hazelcast defaults.
 
 More config options can be added of course, for example:
 
 ```clojure
-(client-instance {:hosts ["10.251.17.163"]
+(client-instance {:near-cache {:name "events"
+                               :time-to-live-seconds 300
+                               :eviction {:eviction-policy :LRU}}})
+```
+
+This config can be combined with other client config options:
+
+```clojure
+(client-instance {:group-name "dev"
+                  :group-password "dev-pass"
+                  :hosts ["127.0.0.1"] 
                   :near-cache {:name "events"
                                :time-to-live-seconds 300
                                :eviction {:eviction-policy :LRU}}})
@@ -574,7 +497,7 @@ More config options can be added of course, for example:
 
 ### Server Near Cache
 
-When the cluster is created, `chazel` allows to compose configurations that will be passed to it on startup:
+`chazel` allows to compose configurations that will be passed to the cluster on startup:
 
 ```clojure
 (cluster-of 3 :conf (->> (with-creds {:group-name "foo" :group-password "bar"})
@@ -920,9 +843,98 @@ clojure.lang.PersistentArrayMap
 
 In case you need to use a different serializer, you can either send a pull request updating [chazel.serializer](https://github.com/tolitius/chazel/blob/master/src/chazel/serializer.clj), or by specifying your own "secret" serialize function in `put!` and `cget`.
 
+## Stats
+
+This is a constant area of improvement and at the moment there are 2 ways to get some stats:
+
+### Maps and Sizes
+
+First is a simplistic way to find all the maps accross the cluster with their sizes (i.e. total number of values across all nodes):
+
+```clojure
+chazel=> (def appl (hz-map "appl"))
+#'chazel/appl
+chazel=> (def goog (hz-map "goog"))
+#'chazel/goog
+
+chazel=> (map-sizes)
+{"goog" {:size 0}, "appl" {:size 0}}
+
+now let's add some values and run `(map-sizes)` again:
+
+chazel=> (doseq [n (range 2048)] (put! goog n (str n)))
+chazel=> (doseq [n (range 1024)] (put! appl n (str n)))
+
+chazel=> (map-sizes)
+{"goog" {:size 2048}, "appl" {:size 1024}}
+```
+
+not too much intel, but proves to be quite useful: you see all the existing maps (IMap distributed objects) as well as their sizes.
+
+### Cluster Stats
+
+In case you need to get _all_ stats across the cluster, there are options:
+
+* [Management Center](https://hazelcast.com/products/management-center/) that comes with hazelcast, but _you pay_ for clusters over 2 nodes
+* [hface](https://github.com/tolitius/hface) will give you all the stats with GUI, free for any number of nodes, but not as powerful as the management center
+* built in chazel `(cluster-stats)` function, but you'll have to include an [8KB dependency](https://clojars.org/org.hface/hface-client) to your cluster nodes
+which is just a callable that is able to collect node stats
+
+Here is an example of a built in `(cluster-stats)`:
+
+```clojure
+
+chazel=> (cluster-stats)
+
+{"Member [192.168.1.185]:5701 this"
+ {:master true,
+  :clusterName "dev",
+  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
+  :memberList
+  ["192.168.1.185:5701" "192.168.2.185:5702" "192.168.2.185:5703"],
+  :memberState
+  {:runtimeProps
+   {:osMemory.freePhysicalMemory 2046976000,
+    :runtime.loadedClassCount 10130,
+    ;;...
+    }}
+   :executorStats {:stats-exec-service {:creationTime 1462910619108, :pending 0, :started 4, :completed 3, :cancelled 0, :totalStartLatency 0, :totalExecutionTime 49}},
+   :multiMapStats {},
+   :topicStats {},
+   :memoryStats {:committedNativeMemory 0, :creationTime 0, :usedNativeMemory 0, :freePhysical 2046976000, :maxNativeMemory 0, :freeNativeMemory 0, :maxHeap 3817865216, :totalPhysical 17179869184, :usedHeap 985153872, :gcStats {:creationTime 0, :minorCount 17, :minorTime 198, :majorCount 2, :majorTime 314, :unknownCount 0, :unknownTime 0}, :committedHeap 1548746752},
+   :mapStats
+   {:goog
+    {:creationTime 1462910602378, :maxGetLatency 0, :maxPutLatency 2, :lastAccessTime 0, :maxRemoveLatency 0, :heapCost 238277, :totalGetLatencies 0, :numberOfOtherOperations 90, :ownedEntryMemoryCost 118788, :getCount 0, :hits 0, :backupCount 1, :totalRemoveLatencies 0, :backupEntryMemoryCost 119489, :removeCount 0, :totalPutLatencies 316, :dirtyEntryCount 0, :lastUpdateTime 1462910608301, :backupEntryCount 681, :lockedEntryCount 0, :ownedEntryCount 677, :putCount 2048, :numberOfEvents 0},
+    :appl
+    {:creationTime 1462910599320, :maxGetLatency 0, :maxPutLatency 68, :lastAccessTime 0, :maxRemoveLatency 0, :heapCost 119125, :totalGetLatencies 0, :numberOfOtherOperations 90, :ownedEntryMemoryCost 60004, :getCount 0, :hits 0, :backupCount 1, :totalRemoveLatencies 0, :backupEntryMemoryCost 59121, :removeCount 0, :totalPutLatencies 390, :dirtyEntryCount 0, :lastUpdateTime 1462910604627, :backupEntryCount 338, :lockedEntryCount 0, :ownedEntryCount 343, :putCount 1024, :numberOfEvents 0}},
+   :replicatedMapStats {},
+   :queueStats {},
+   ;; lots and lots more for this member..
+ }
+
+ "Member [192.168.2.185]:5703"
+ {:master false,
+  :clusterName "dev",
+  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
+  ;; lots and lots more for this member..
+ }
+
+ "Member [192.168.2.185]:5702"
+ {:master false,
+  :clusterName "dev",
+  :instanceNames ["c:goog" "c:appl" "e:stats-exec-service"],
+   ;; lots and lots more for this member..
+ }
+```
+
+`(cluster-stats)` returns a `{member stats}` map with ALL the stats available for the cluster.
+
+again in order to make it work, add a little [8KB dependency](https://clojars.org/org.hface/hface-client) to your cluster nodes, so it can collect stats
+from each node / member.
+
 ## License
 
-Copyright © 2016 tolitius
+Copyright © 2017 tolitius
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
