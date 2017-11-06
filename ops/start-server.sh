@@ -3,7 +3,7 @@
 # just to get the ball rolling
 # update for your actual OPS needs (i.e. start|stop, paths, java home, jvm args, etc..)
 
-export HZ_VERSION=3.7.4
+export HZ_VERSION=3.9
 export CLASSPATH=~/.m2/repository/com/hazelcast/hazelcast/$HZ_VERSION/hazelcast-$HZ_VERSION.jar
 
 export SERVER_HOME=.
