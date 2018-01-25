@@ -15,14 +15,14 @@
                                  InMemoryFormat
                                  EvictionConfig EvictionPolicy EvictionConfig$MaxSizePolicy
                                  NearCacheConfig NearCachePreloaderConfig NearCacheConfig$LocalUpdatePolicy]
-           [com.hazelcast.map.listener EntryAddedListener 
-                                       EntryRemovedListener 
+           [com.hazelcast.map.listener EntryAddedListener
+                                       EntryRemovedListener
                                        EntryEvictedListener
                                        EntryUpdatedListener]
            [com.hazelcast.instance HazelcastInstanceProxy]
            [org.hface InstanceStatsTask]))
 
-(defn new-instance 
+(defn new-instance
   ([] (new-instance nil))
   ([conf]
     (Hazelcast/newHazelcastInstance conf)))
@@ -30,8 +30,8 @@
 (defn all-instances []
   (Hazelcast/getAllHazelcastInstances))
 
-(defn hz-instance 
-  ([] 
+(defn hz-instance
+  ([]
      (or (first (all-instances))
          (new-instance)))
   ([conf]
@@ -108,7 +108,7 @@
         groupConfig (GroupConfig. group-name group-password)
         near-cache (when near-cache
                      (near-cache-config near-cache))]
-    (doto config 
+    (doto config
       (.getNetworkConfig)
       (.addAddress (into-array hosts))
       (.setConnectionAttemptPeriod retry-ms)
@@ -145,7 +145,7 @@
       (cond-> group-name (assoc :group-name "********")
               group-password (assoc :group-password "********"))))
 
-(defn client-instance 
+(defn client-instance
   ([] (client-instance {}))
   ([conf]
     (let [ci @c-instance]
@@ -172,10 +172,10 @@
 (defn find-all-maps
   ([] (find-all-maps (hz-instance)))
   ([instance]
-  (filter #(instance? com.hazelcast.core.IMap %) 
+  (filter #(instance? com.hazelcast.core.IMap %)
           (distributed-objects instance))))
 
-(defn map-sizes 
+(defn map-sizes
   ([] (map-sizes (hz-instance)))
   ([instance]
   (reduce (fn [m o]
@@ -183,7 +183,7 @@
               (assoc m (.getName o) {:size (.size o)})
               m)) {} (distributed-objects instance))))
 
-(defn cluster-stats 
+(defn cluster-stats
   ([] (cluster-stats (hz-instance)))
   ([instance]
    (try
@@ -198,28 +198,28 @@
 
 ;; adds a string kv pair to the local member of this hazelcast instance
 (defn add-member-attr [instance k v]
-  (-> instance 
+  (-> instance
     (.getCluster)
     (.getLocalMember)
     (.setStringAttribute k v)))
 
 (defn local-member-by-instance [instance]
-  (-> instance 
+  (-> instance
     (.getCluster)
     (.getLocalMember)))
 
 (defn members-by-instance [instance]
-  (-> instance 
+  (-> instance
     (.getCluster)
     (.getLocalMember)))
 
-(defn hz-map 
+(defn hz-map
   ([m]
     (hz-map (name m) (hz-instance)))
   ([m instance]
     (.getMap instance (name m))))
 
-(defn hz-mmap 
+(defn hz-mmap
   ([m]
     (hz-mmap (name m) (hz-instance)))
   ([m instance]
@@ -239,7 +239,7 @@
 
 (defn message-listener [f]
   (when (fn? f)
-    (reify 
+    (reify
       MessageListener
         (^void onMessage [this ^Message msg]
           (f (.getMessageObject msg))))))     ;; TODO: {:msg :member :timestamp}
@@ -247,12 +247,12 @@
 (defn reliable-message-listener [f {:keys [start-from store-seq loss-tolerant? terminal?]
                                     :or {start-from -1 store-seq identity loss-tolerant? false terminal? true}}]
   (when (fn? f)
-    (reify 
+    (reify
       ReliableMessageListener
         (^long retrieveInitialSequence [this] start-from)
         (^void storeSequence [this ^long sq] (store-seq sq))
         (^boolean isLossTolerant [this] loss-tolerant?)
-        (^boolean isTerminal [this ^Throwable failure] 
+        (^boolean isTerminal [this ^Throwable failure]
           (throw failure)
           terminal?)
       MessageListener
@@ -302,13 +302,13 @@
     (when instance
       (.shutdown instance))))
 
-(defn put! 
+(defn put!
   ([^IMap m k v f]
     (put! m k (f v)))
   ([^IMap m k v]
     (.put m k v)))
 
-(defn cget 
+(defn cget
   ([^IMap m k f]
     (f (cget m k)))
   ([^IMap m k]
@@ -323,7 +323,7 @@
 (defn delete! [^IMap m k]
   (.delete m k))
 
-(defn add-index 
+(defn add-index
   ([^IMap m index]
    (add-index m index false))
   ([^IMap m index ordered?]
@@ -348,7 +348,7 @@
   Pageable
   (next-page [_]
              (.nextPage pred)
-             (run-query m where as pred))) 
+             (run-query m where as pred)))
 
 (def comp-keys
   (comparator (fn [a b]
@@ -385,21 +385,21 @@
 
 (defn entry-added-listener [f]
   (when (fn? f)
-    (reify 
+    (reify
       EntryAddedListener
         (^void entryAdded [this ^EntryEvent entry]
           (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
 
 (defn entry-removed-listener [f]
   (when (fn? f)
-    (reify 
+    (reify
       EntryRemovedListener
         (^void entryRemoved [this ^EntryEvent entry]
           (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
 
 (defn entry-updated-listener [f]
   (when (fn? f)
-    (reify 
+    (reify
       EntryUpdatedListener
         (^void entryUpdated [this ^EntryEvent entry]
           (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
