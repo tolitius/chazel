@@ -393,7 +393,7 @@ Luke Skywalker comes last in this chapter, but no worries, this is just the begi
 
 ## Continuous Query Cache
 
-A continuous query cache is used to cache the result of a continuous query. After the construction of a continuous query cache, all changes on the underlying IMap are immediately reflected to this cache as a stream of events. Therefore, this cache will be an always up-to-date view of the IMap. You can create a continuous query cache either on the client or member. (more from Hazelcast [docs](http://docs.hazelcast.org/docs/3.8/manual/html-single/index.html#continuous-query-cache))
+A continuous query cache is used to cache the result of a continuous query. After the construction of a continuous query cache, all changes on the underlying IMap are immediately reflected to this cache as a stream of events. Therefore, this cache will be an always up-to-date view of the IMap. You can create a continuous query cache either on the client or member. (_[more](http://docs.hazelcast.org/docs/3.8/manual/html-single/index.html#continuous-query-cache) from Hazelcast docs_)
 
 ### Vim Jedis
 
