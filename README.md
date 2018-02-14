@@ -14,6 +14,8 @@ Hazelcast bells and whistles under the Clojure belt
   - [Pagination, ORDER BY, LIMIT](#pagination-order-by-limit)
     - [Paging Jedis](#paging-jedis)
     - [Jedi Order (By)](#jedi-order-by)
+- [Continuous Query Cache](#continuous-query-cache)
+  - [Vim Jedis](#vim-jedis)
 - [Near Cache](#near-cache)
   - [Client Near Cache](#client-near-cache)
   - [Server Near Cache](#server-near-cache)
@@ -84,7 +86,7 @@ user=> (def goog (hz-map :goog))
 user=> (put! goog :goog 42)
 
 user=> (find-all-maps)
-({:appl 42} 
+({:appl 42}
  {:goog 42})
 ```
 
@@ -92,11 +94,11 @@ user=> (find-all-maps)
 
 ```clojure
 user=> (def c (client-instance {:group-name "dev",
-                                :group-password "dev-pass", 
-                                :hosts ["127.0.0.1"], 
-                                :retry-ms 5000, 
+                                :group-password "dev-pass",
+                                :hosts ["127.0.0.1"],
+                                :retry-ms 5000,
                                 :retry-max 720000}))
-                                
+
 INFO: connecting to:  {:group-password dev-pass, :hosts [127.0.0.1], :retry-ms 5000, :retry-max 720000, :group-name dev}
 
 user=> c
@@ -124,9 +126,14 @@ Since Hazelcast internally works with Java objects, it relies on getter/setter a
 Let's call for the Jedi Masters:
 
 ```clojure
+[chazel]$ boot dev             ;; this will load Jedi type
+Compiling 1/1 chazel.jedis...
+nREPL server started..
+
 chazel=> (require '[chazel.core :refer :all])
 chazel=> (import '[chazel.jedis Jedi])
-
+```
+```clojure
 chazel=> (def masters {1 (Jedi. "Yoda" "vim")
                        2 (Jedi. "Mace Windu" "emacs")
                        3 (Jedi. "Qui-Gon Jinn" "cursive")
@@ -137,7 +144,7 @@ chazel=> (def masters {1 (Jedi. "Yoda" "vim")
                        8 (Jedi. "Jaina Solo Fel" "atom")})
 ```
 
-[Jedi](test/chazel/jedis.clj#L5) is an example type that has `name` and `editor` fields. 
+[Jedi](dev/chazel/jedis.clj#L5) is an example type that has `name` and `editor` fields.
 
 You guessed it right, we are going to rely on SQL query powers to finally find out which editors Jedis Masters use!
 
@@ -157,15 +164,15 @@ Let's now run some _distributed_ SQL on the new Jedi Master database:
 ```clojure
 chazel=> (select jedis "editor = vim")
 
-#{#<Jedi {:name Obi-Wan Kenobi :editor vim}> 
-  #<Jedi {:name Yoda :editor vim}> 
+#{#<Jedi {:name Obi-Wan Kenobi :editor vim}>
+  #<Jedi {:name Yoda :editor vim}>
   #<Jedi {:name Luke Skywalker :editor vim}>}
 ```
 
 ```clojure
 chazel=> (select jedis "name like %Sky%")
 
-#{#<Jedi {:name Luke Skywalker :editor vim}> 
+#{#<Jedi {:name Luke Skywalker :editor vim}>
   #<Jedi {:name Mara Jade Skywalker :editor emacs}>}
 ```
 
@@ -188,8 +195,8 @@ now this query will run _waaay_ faster:
 ```clojure
 chazel=> (select jedis "editor = vim")
 
-#{#<Jedi {:name Obi-Wan Kenobi :editor vim}> 
-  #<Jedi {:name Yoda :editor vim}> 
+#{#<Jedi {:name Obi-Wan Kenobi :editor vim}>
+  #<Jedi {:name Yoda :editor vim}>
   #<Jedi {:name Luke Skywalker :editor vim}>}
 ```
 
@@ -384,6 +391,83 @@ chazel=> (next-page pages)
 
 Luke Skywalker comes last in this chapter, but no worries, this is just the beginning...
 
+## Continuous Query Cache
+
+A continuous query cache is used to cache the result of a continuous query. After the construction of a continuous query cache, all changes on the underlying IMap are immediately reflected to this cache as a stream of events. Therefore, this cache will be an always up-to-date view of the IMap. You can create a continuous query cache either on the client or member. (more from Hazelcast [docs](http://docs.hazelcast.org/docs/3.8/manual/html-single/index.html#continuous-query-cache))
+
+### Vim Jedis
+
+We'll continue working with Jedi masters from [Jedi Order](#jedi-order):
+
+```clojure
+=> (select jedis "*")
+
+#{#object[chazel.jedis.Jedi 0x1f987361 "{:name Yoda :editor vim}"]
+  #object[chazel.jedis.Jedi 0x5f645ec6 "{:name Mara Jade Skywalker :editor emacs}"]
+  #object[chazel.jedis.Jedi 0xc9654d "{:name Mace Windu :editor emacs}"]
+  #object[chazel.jedis.Jedi 0x144ca20f "{:name Obi-Wan Kenobi :editor vim}"]
+  #object[chazel.jedis.Jedi 0x49279cf0 "{:name Jaina Solo Fel :editor atom}"]
+  #object[chazel.jedis.Jedi 0x6e35e872 "{:name Leia Organa Solo :editor emacs}"]
+  #object[chazel.jedis.Jedi 0x63b4f296 "{:name Luke Skywalker :editor vim}"]
+  #object[chazel.jedis.Jedi 0x1b0037fe "{:name Qui-Gon Jinn :editor cursive}"]}
+```
+
+Let's say we need to cache masters who use Vim editor. We also need this cache to be continuously updating whenever records are added or removed to/from the source `jedis` map. In order to do that all we need to do is to create a "[QueryCache](http://docs.hazelcast.org/docs/3.8/javadoc/com/hazelcast/map/QueryCache.html)".
+
+In order to create such a [QueryCache](http://docs.hazelcast.org/docs/3.8/javadoc/com/hazelcast/map/QueryCache.html), we'll use a `query-cache` function that take these arguments:
+
+* source map: which maps to create this cache for
+* cache name: a internal name of this cache
+* predicate: to filter the exiting source map entries
+* include value?: a boolean flag => "true" if this QueryCache is allowed to cache _values_ of entries, otherwise "false"
+* listener: a [MapListener](http://docs.hazelcast.org/docs/3.8/javadoc/com/hazelcast/map/listener/MapListener.html) which will be used to listen this QueryCache
+
+At a minimum `query-cache` would need a "source map", "cache name" and "predicate":
+
+```clojure
+=> (def vim (query-cache jedis "vim-cache" "editor = vim"))
+```
+
+here `jedis` is a source map, `"vim-cache"` is the cache name and `"editor = vim"` is a predicate.
+
+Let's look at vim's type:
+
+```clojure
+=> (type vim)
+com.hazelcast.map.impl.querycache.subscriber.DefaultQueryCache
+```
+
+This query cache is as "`select`able" as any other map:
+
+```clojure
+=> (select vim "*")
+#{#object[chazel.jedis.Jedi 0x10fcece9 "{:name Luke Skywalker :editor vim}"]
+  #object[chazel.jedis.Jedi 0x5fe3f833 "{:name Yoda :editor vim}"]
+  #object[chazel.jedis.Jedi 0x2267043e "{:name Obi-Wan Kenobi :editor vim}"]}
+```
+
+```clojure
+=> (select vim "name like %Sky%")
+#{#object[chazel.jedis.Jedi 0x44a03065 "{:name Luke Skywalker :editor vim}"]}
+```
+
+Optionally `query-cache` function also takes `include-value?` and a `listener` which makes it 4 possible combinations:
+
+* [source-map cache-name]
+* [source-map cache-name pred]
+* [source-map cache-name pred include-value?]
+* [source-map cache-name pred listener include-value?]
+
+In case only a `source-map` and a `cache-name` are given, `query-cache` will look this cache up by name and will return `nil` in case this cache does not exist, otherwise it will return a previously created cache that was created with this name.
+
+```clojure
+=> (query-cache jedis "vim-cache")
+#object[com.hazelcast.map.impl.querycache.subscriber.DefaultQueryCache 0x7f61bdeb "com.hazelcast.map.impl.querycache.subscriber.DefaultQueryCacheRecordStore@12579667"]
+
+=> (query-cache jedis "vc")        ;; this cache does not exist
+nil
+```
+
 ## Near Cache
 
 Near Cache is highly recommended for data structures that are mostly read. The idea is to bring data closer to the caller, and keep it in sync with the source.
@@ -489,7 +573,7 @@ This config can be combined with other client config options:
 ```clojure
 (client-instance {:group-name "dev"
                   :group-password "dev-pass"
-                  :hosts ["127.0.0.1"] 
+                  :hosts ["127.0.0.1"]
                   :near-cache {:name "events"
                                :time-to-live-seconds 300
                                :eviction {:eviction-policy :LRU}}})
@@ -811,7 +895,7 @@ all back to vanilla, no listeners involved, map business.
 
 ## Serialization
 
-Serialization is a big deal when hazelcast nodes are distributed, or when you connect to a remote hazelcast cluster. 
+Serialization is a big deal when hazelcast nodes are distributed, or when you connect to a remote hazelcast cluster.
 chazel solves this problem by delegating it to an optional serializer.
 
 To start off, chazel has a [transit](https://github.com/cognitect/transit-clj) seriailzer ready to go:

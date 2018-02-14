@@ -377,6 +377,17 @@
       rset
       {:pages (Pages. m where as pred) :results rset})))
 
+(defn query-cache
+  "continuous query cache: i.e. (query-cache m \"vim-cache\" \"editor = vim\")"
+  ([m cname]
+   (.getQueryCache m cname))
+  ([m cname pred]
+   (query-cache m cname pred true))
+  ([m cname pred include-value?]
+   (.getQueryCache m cname (SqlPredicate. pred) include-value?))
+  ([m cname pred listener include-value?]
+   (.getQueryCache m cname listener (SqlPredicate. pred) include-value?)))
+
 (defn add-entry-listener [m ml]
   (.addEntryListener m ml true))
 

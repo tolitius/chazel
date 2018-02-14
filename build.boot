@@ -4,8 +4,8 @@
   :source-paths #{"src"}
   :dependencies '[[org.clojure/clojure "1.8.0"]
                   [org.clojure/tools.logging "0.3.1"]
-                  [com.hazelcast/hazelcast "3.9.2"]
-                  [com.hazelcast/hazelcast-client "3.9.2"]
+                  [com.hazelcast/hazelcast "3.8.9"]
+                  [com.hazelcast/hazelcast-client "3.8.9"]
                   [org.hface/hface-client "0.1.5"]
                   [cheshire "5.6.3"]
                   [com.cognitect/transit-clj "0.8.275"]
