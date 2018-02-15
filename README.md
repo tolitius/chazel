@@ -16,6 +16,8 @@ Hazelcast bells and whistles under the Clojure belt
     - [Jedi Order (By)](#jedi-order-by)
 - [Continuous Query Cache](#continuous-query-cache)
   - [Vim Jedis](#vim-jedis)
+  - [Is Continuous](#is-continuous)
+  - [Is Fast](#is-fast)
 - [Near Cache](#near-cache)
   - [Client Near Cache](#client-near-cache)
   - [Server Near Cache](#server-near-cache)
@@ -467,6 +469,84 @@ In case only a `source-map` and a `cache-name` are given, `query-cache` will loo
 => (query-cache jedis "vc")        ;; this cache does not exist
 nil
 ```
+
+### Is Continuous
+
+Whenever underlying data in the source map changes query cache will always be upto date if these changes affect teh predicate of course:
+
+```clojure
+=> (put! jedis 42 (Jedi. "Hazel Caster" "vim"))
+```
+
+```clojure
+=> (select vim "*")
+
+#{#object[shubao.jedis.Jedi 0x7f518c04 "{:name Luke Skywalker :editor vim}"]
+  #object[shubao.jedis.Jedi 0x4fd2044b "{:name Hazel Caster :editor vim}"]
+  #object[shubao.jedis.Jedi 0x206c812 "{:name Yoda :editor vim}"]
+  #object[shubao.jedis.Jedi 0x237fbc94 "{:name Obi-Wan Kenobi :editor vim}"]}
+```
+
+```clojure
+=> (remove! jedis 5) ;; removing "Luke Skywalker"
+```
+```clojure
+=> (select vim "*")
+#{#object[shubao.jedis.Jedi 0x1a7320c0 "{:name Obi-Wan Kenobi :editor vim}"]
+  #object[shubao.jedis.Jedi 0x695908a1 "{:name Yoda :editor vim}"]
+  #object[shubao.jedis.Jedi 0x4d51aba4 "{:name Hazel Caster :editor vim}"]}
+```
+
+Nice, `vim` is a pretty "view" that is also "materialized"
+
+### Is Fast
+
+Continuous query cache can be created on the cluster member as well as on the cluster client. And when it is created on the client, given that there is enough memory to keep the cache, it really gains client a lot of performance.
+
+Let's connect as a client to a remote cluster (that has Jedis on its classpath):
+
+```clojure
+=> (def client (client-instance {:hosts ["remote-hz-cluster.host"] :group-name "dev" :group-password "dev-pass"}))
+#'chazel/client
+```
+
+and work with this remote "jedis" map:
+
+```clojure
+=> (def jedis (hz-map "jedis" client))
+#'chazel/jedis
+```
+
+Measure the time it takes to run "a where editor = vim" query remotely:
+
+```clojure
+=> (time (select jedis "editor = vim"))
+
+#{#object[shubao.jedis.Jedi 0x28a045c4 "{:name Obi-Wan Kenobi :editor vim}"]
+  #object[shubao.jedis.Jedi 0x2b64eda6 "{:name Hazel Caster :editor vim}"]
+  #object[shubao.jedis.Jedi 0x566f6bd7 "{:name Yoda :editor vim}"]}
+
+"Elapsed time: 36.261975 msecs"
+```
+
+Create a query cache with the same predicate:
+
+```clojure
+dev=> (def vim (query-cache jedis "vim-cache" "editor = vim"))
+#'chazel/vim
+```
+
+and time it:
+
+```clojure
+=> (time (select vim "*"))
+#{#object[shubao.jedis.Jedi 0x312ee7e0 "{:name Yoda :editor vim}"]
+  #object[shubao.jedis.Jedi 0x5ddb17e1 "{:name Hazel Caster :editor vim}"]
+  #object[shubao.jedis.Jedi 0x3aa47722 "{:name Obi-Wan Kenobi :editor vim}"]}
+"Elapsed time: 0.355571 msecs"
+```
+
+more than 100 times faster: it's local _and continuous_.
 
 ## Near Cache
 
