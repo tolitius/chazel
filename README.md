@@ -414,14 +414,14 @@ We'll continue working with Jedi masters from [Jedi Order](#jedi-order):
   #object[chazel.jedis.Jedi 0x1b0037fe "{:name Qui-Gon Jinn :editor cursive}"]}
 ```
 
-Let's say we need to cache masters who use Vim editor. We also need this cache to be continuously updating whenever records are added or removed to/from the source `jedis` map. In order to do that all we need to do is to create a "[QueryCache](http://docs.hazelcast.org/docs/3.8/javadoc/com/hazelcast/map/QueryCache.html)".
+Let's say we need to cache masters who use Vim editor. We also need this cache to be continuously updating whenever records are added or removed to/from the source `jedis` map. In order to do that all we need to do is to create a [QueryCache](http://docs.hazelcast.org/docs/3.8/javadoc/com/hazelcast/map/QueryCache.html).
 
-In order to create such a [QueryCache](http://docs.hazelcast.org/docs/3.8/javadoc/com/hazelcast/map/QueryCache.html), we'll use a `query-cache` function that take these arguments:
+In order to create such a QueryCache, we'll use a `query-cache` function that take these arguments:
 
 * source map: which maps to create this cache for
 * cache name: a internal name of this cache
 * predicate: to filter the exiting source map entries
-* include value?: a boolean flag => "true" if this QueryCache is allowed to cache _values_ of entries, otherwise "false"
+* include value?: a boolean flag => "true" (default) if this QueryCache is allowed to cache _values_ of entries, otherwise "false"
 * listener: a [MapListener](http://docs.hazelcast.org/docs/3.8/javadoc/com/hazelcast/map/listener/MapListener.html) which will be used to listen this QueryCache
 
 At a minimum `query-cache` would need a "source map", "cache name" and "predicate":
@@ -472,7 +472,7 @@ nil
 
 ### Is Continuous
 
-Whenever underlying data in the source map changes query cache will always be upto date if these changes affect teh predicate of course:
+Whenever underlying data in the source map changes query cache will always be upto date if these changes affect the predicate of course:
 
 ```clojure
 => (put! jedis 42 (Jedi. "Hazel Caster" "vim"))
@@ -501,9 +501,9 @@ Nice, `vim` is a pretty "view" that is also "materialized"
 
 ### Is Fast
 
-Continuous query cache can be created on the cluster member as well as on the cluster client. And when it is created on the client, given that there is enough memory to keep the cache, it really gains client a lot of performance.
+Continuous query cache can be created on a cluster member as well as on a cluster client. And when it is created on the client, given that there is enough memory to keep the cache, it really gains client a lot of performance.
 
-Let's connect as a client to a remote cluster (that has Jedis on its classpath):
+Let's connect as a client to a remote cluster (that has Jedi type on its classpath):
 
 ```clojure
 => (def client (client-instance {:hosts ["remote-hz-cluster.host"] :group-name "dev" :group-password "dev-pass"}))
@@ -540,9 +540,11 @@ and time it:
 
 ```clojure
 => (time (select vim "*"))
+
 #{#object[shubao.jedis.Jedi 0x312ee7e0 "{:name Yoda :editor vim}"]
   #object[shubao.jedis.Jedi 0x5ddb17e1 "{:name Hazel Caster :editor vim}"]
   #object[shubao.jedis.Jedi 0x3aa47722 "{:name Obi-Wan Kenobi :editor vim}"]}
+
 "Elapsed time: 0.355571 msecs"
 ```
 
