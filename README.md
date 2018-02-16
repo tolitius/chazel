@@ -6,6 +6,7 @@ Hazelcast bells and whistles under the Clojure belt
 
 - [Creating a Cluster](#creating-a-cluster)
 - [Working with Data Structures](#working-with-data-structures)
+  - [Good Old Java API](#good-old-java-api)
 - [Connecting as a Client](#connecting-as-a-client)
 - [Distributed SQL Queries](#distributed-sql-queries)
   - [Jedi Order](#jedi-order)
@@ -90,6 +91,34 @@ user=> (put! goog :goog 42)
 user=> (find-all-maps)
 ({:appl 42}
  {:goog 42})
+```
+
+### Good Old Java API
+
+Since Hazelcast collection API implement Java collection API, Hazelcast _distributed_ datastructures can be navigated and manipulated in the same way as Java local collections:
+
+```clojure
+=> (def alpha (hz-map :alpha))
+#'chazel/alpha
+
+=> (put-all! alpha {6 :f 1 :a  3 :c 4 :d 2 :b 5 :e})
+
+=> alpha
+{3 :c, 1 :a, 2 :b, 4 :d, 5 :e, 6 :f}
+```
+
+and now:
+
+```clojure
+=> (into (sorted-map) alpha)
+{1 :a, 2 :b, 3 :c, 4 :d, 5 :e, 6 :f}
+```
+
+all works as it would with any other `java.util.Map`, only in this case the map is distributed and lives across cluster nodes:
+
+```clojure
+=> (type alpha)
+com.hazelcast.map.impl.proxy.MapProxyImpl
 ```
 
 ## Connecting as a Client
