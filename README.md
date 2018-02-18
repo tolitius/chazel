@@ -121,6 +121,25 @@ all works as it would with any other `java.util.Map`, only in this case the map 
 com.hazelcast.map.impl.proxy.MapProxyImpl
 ```
 
+Other Hazelcast data structures, such as lists for example, could be manipulated with the "same old" Java/Clojure API:
+
+```clojure
+=> (def anum (hz-list :alpha-num))
+#'chazel/anum
+
+=> (add-all! anum [0 :a 1 :b 2 :c 3 :d 4 :e 5 :f 6 7 8 9])
+
+=> (group-by int? anum)
+
+{true [0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9],
+ false [:a :b :c :d :e :f :a :b :c :d :e :f]}
+```
+
+```clojure
+=> (type anum)
+com.hazelcast.collection.impl.list.ListProxyImpl
+```
+
 ## Connecting as a Client
 
 ```clojure

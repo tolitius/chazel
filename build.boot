@@ -2,7 +2,7 @@
 
 (set-env!
   :source-paths #{"src"}
-  :dependencies '[[org.clojure/clojure "1.8.0"]
+  :dependencies '[[org.clojure/clojure "1.9.0"]
                   [org.clojure/tools.logging "0.3.1"]
                   [com.hazelcast/hazelcast "3.9.3"]
                   [com.hazelcast/hazelcast-client "3.9.3"]

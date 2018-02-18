@@ -5,7 +5,7 @@
   (:import [java.util Collection Map]
            [java.io Serializable]
            [java.util.concurrent Callable]
-           [com.hazelcast.core Hazelcast IMap EntryEvent ITopic Message MessageListener]
+           [com.hazelcast.core Hazelcast IMap ICollection EntryEvent ITopic Message MessageListener]
            [com.hazelcast.topic ReliableMessageListener]
            [com.hazelcast.query SqlPredicate PagingPredicate]
            [com.hazelcast.client HazelcastClient]
@@ -328,6 +328,9 @@
 
 (defn delete! [^IMap m k]
   (.delete m k))
+
+(defn add-all! [^ICollection hc ^Collection c]
+  (.addAll hc c))
 
 (defn add-index
   ([^IMap m index]
