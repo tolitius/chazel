@@ -131,8 +131,8 @@ Other Hazelcast data structures, such as lists for example, could be manipulated
 
 => (group-by int? anum)
 
-{true [0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9],
- false [:a :b :c :d :e :f :a :b :c :d :e :f]}
+{true [0 1 2 3 4 5 6 7 8 9],
+ false [:a :b :c :d :e :f]}
 ```
 
 ```clojure
