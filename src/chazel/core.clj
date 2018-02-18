@@ -213,6 +213,12 @@
     (.getCluster)
     (.getLocalMember)))
 
+(defn hz-list
+  ([m]
+    (hz-list (name m) (hz-instance)))
+  ([m instance]
+    (.getList instance (name m))))
+
 (defn hz-map
   ([m]
     (hz-map (name m) (hz-instance)))
