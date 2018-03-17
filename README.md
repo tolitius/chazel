@@ -529,10 +529,10 @@ Whenever underlying data in the source map changes query cache will always be up
 ```clojure
 => (select vim "*")
 
-#{#object[shubao.jedis.Jedi 0x7f518c04 "{:name Luke Skywalker :editor vim}"]
-  #object[shubao.jedis.Jedi 0x4fd2044b "{:name Hazel Caster :editor vim}"]
-  #object[shubao.jedis.Jedi 0x206c812 "{:name Yoda :editor vim}"]
-  #object[shubao.jedis.Jedi 0x237fbc94 "{:name Obi-Wan Kenobi :editor vim}"]}
+#{#object[chazel.jedis.Jedi 0x7f518c04 "{:name Luke Skywalker :editor vim}"]
+  #object[chazel.jedis.Jedi 0x4fd2044b "{:name Hazel Caster :editor vim}"]
+  #object[chazel.jedis.Jedi 0x206c812 "{:name Yoda :editor vim}"]
+  #object[chazel.jedis.Jedi 0x237fbc94 "{:name Obi-Wan Kenobi :editor vim}"]}
 ```
 
 ```clojure
@@ -540,9 +540,9 @@ Whenever underlying data in the source map changes query cache will always be up
 ```
 ```clojure
 => (select vim "*")
-#{#object[shubao.jedis.Jedi 0x1a7320c0 "{:name Obi-Wan Kenobi :editor vim}"]
-  #object[shubao.jedis.Jedi 0x695908a1 "{:name Yoda :editor vim}"]
-  #object[shubao.jedis.Jedi 0x4d51aba4 "{:name Hazel Caster :editor vim}"]}
+#{#object[chazel.jedis.Jedi 0x1a7320c0 "{:name Obi-Wan Kenobi :editor vim}"]
+  #object[chazel.jedis.Jedi 0x695908a1 "{:name Yoda :editor vim}"]
+  #object[chazel.jedis.Jedi 0x4d51aba4 "{:name Hazel Caster :editor vim}"]}
 ```
 
 Nice, `vim` is a pretty "view" that is also "materialized"
@@ -570,9 +570,9 @@ Measure the time it takes to run "a where editor = vim" query remotely:
 ```clojure
 => (time (select jedis "editor = vim"))
 
-#{#object[shubao.jedis.Jedi 0x28a045c4 "{:name Obi-Wan Kenobi :editor vim}"]
-  #object[shubao.jedis.Jedi 0x2b64eda6 "{:name Hazel Caster :editor vim}"]
-  #object[shubao.jedis.Jedi 0x566f6bd7 "{:name Yoda :editor vim}"]}
+#{#object[chazel.jedis.Jedi 0x28a045c4 "{:name Obi-Wan Kenobi :editor vim}"]
+  #object[chazel.jedis.Jedi 0x2b64eda6 "{:name Hazel Caster :editor vim}"]
+  #object[chazel.jedis.Jedi 0x566f6bd7 "{:name Yoda :editor vim}"]}
 
 "Elapsed time: 36.261975 msecs"
 ```
@@ -589,9 +589,9 @@ and time it:
 ```clojure
 => (time (select vim "*"))
 
-#{#object[shubao.jedis.Jedi 0x312ee7e0 "{:name Yoda :editor vim}"]
-  #object[shubao.jedis.Jedi 0x5ddb17e1 "{:name Hazel Caster :editor vim}"]
-  #object[shubao.jedis.Jedi 0x3aa47722 "{:name Obi-Wan Kenobi :editor vim}"]}
+#{#object[chazel.jedis.Jedi 0x312ee7e0 "{:name Yoda :editor vim}"]
+  #object[chazel.jedis.Jedi 0x5ddb17e1 "{:name Hazel Caster :editor vim}"]
+  #object[chazel.jedis.Jedi 0x3aa47722 "{:name Obi-Wan Kenobi :editor vim}"]}
 
 "Elapsed time: 0.355571 msecs"
 ```
