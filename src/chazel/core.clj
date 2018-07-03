@@ -431,11 +431,14 @@
      (^void entryEvicted [this ^EntryEvent entry]
        (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
 
-(deftype Task [fun]
+(deftype Rtask [fun]
   Serializable
 
   Runnable
-  (run [_] (fun))
+  (run [_] (fun)))
+
+(deftype Ctask [fun]
+  Serializable
 
   Callable
   (call [_] (fun)))
@@ -462,19 +465,19 @@
 (defn task [fun & args]
   (let [{:keys [exec-svc members]} (apply task-args args)]
     (if (= :all members)
-      (.executeOnAllMembers exec-svc (Task. fun))
-      (.execute exec-svc (Task. fun)))))
+      (.executeOnAllMembers exec-svc (Rtask. fun))
+      (.execute exec-svc (Rtask. fun)))))
 
 (defn ftask [fun & args]
   (let [{:keys [exec-svc members callback]} (apply task-args args)]
     (if (= :all members)
-      (.submitToAllMembers exec-svc (Task. fun))    ;; TODO: add MultiExecutionCallback
+      (.submitToAllMembers exec-svc (Ctask. fun))    ;; TODO: add MultiExecutionCallback
       (if callback
         (.submit exec-svc
-                 (Task. fun)
+                 (Ctask. fun)
                  (execution-callback callback))
         (.submit exec-svc
-                 (Task. fun))))))
+                 (Ctask. fun))))))
 
 (defn mtake [n m]
   (into {} (take n (hz-map m))))
