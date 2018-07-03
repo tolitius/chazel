@@ -5,7 +5,7 @@
   (:import [java.util Collection Map]
            [java.io Serializable]
            [java.util.concurrent Callable]
-           [com.hazelcast.core Hazelcast IMap ICollection EntryEvent ITopic Message MessageListener]
+           [com.hazelcast.core Hazelcast IMap ICollection EntryEvent ITopic Message MessageListener ExecutionCallback]
            [com.hazelcast.topic ReliableMessageListener]
            [com.hazelcast.query SqlPredicate PagingPredicate]
            [com.hazelcast.client HazelcastClient]
@@ -441,13 +441,23 @@
   (call [_] (fun)))
 
 (defn- task-args [& {:keys [members instance es-name]
-                   :or {members :any
-                        instance (if (client-instance?)
-                                  (client-instance)
-                                  (hz-instance))
-                        es-name :default}
-                   :as args}]
+                     :or {members :any
+                          instance (if (client-instance?)
+                                     (client-instance)
+                                     (hz-instance))
+                          es-name :default}
+                     :as args}]
   (assoc args :exec-svc (.getExecutorService instance (name es-name))))
+
+(defn execution-callback [{:keys [on-response on-failure]
+                           :or {on-response identity
+                                on-failure identity}}]
+  (reify
+    ExecutionCallback
+    (onFailure [this throwable]
+      (on-failure throwable))
+    (onResponse [this response]
+      (on-response response))))
 
 (defn task [fun & args]
   (let [{:keys [exec-svc members]} (apply task-args args)]
@@ -456,10 +466,15 @@
       (.execute exec-svc (Task. fun)))))
 
 (defn ftask [fun & args]
-  (let [{:keys [exec-svc members]} (apply task-args args)]
+  (let [{:keys [exec-svc members callback]} (apply task-args args)]
     (if (= :all members)
-      (.submitToAllMembers exec-svc (Task. fun))
-      (.submit exec-svc (Task. fun)))))
+      (.submitToAllMembers exec-svc (Task. fun))    ;; TODO: add MultiExecutionCallback
+      (if callback
+        (.submit exec-svc
+                 (Task. fun)
+                 (execution-callback callback))
+        (.submit exec-svc
+                 (Task. fun))))))
 
 (defn mtake [n m]
   (into {} (take n (hz-map m))))
