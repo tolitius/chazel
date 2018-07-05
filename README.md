@@ -2,7 +2,7 @@
 
 Hazelcast bells and whistles under the Clojure belt
 
-![](https://clojars.org/chazel/latest-version.svg)
+[![chazel on clojars](https://clojars.org/chazel/latest-version.svg)](https://clojars.org/chazel)
 
 - [Creating a Cluster](#creating-a-cluster)
 - [Working with Data Structures](#working-with-data-structures)
