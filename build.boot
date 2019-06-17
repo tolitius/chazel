@@ -1,12 +1,12 @@
-(def +version+ "0.1.18-SNAPSHOT")
+(def +version+ "0.1.18")
 
 (set-env!
   :source-paths #{"src"}
-  :dependencies '[[org.clojure/clojure "1.9.0"]
-                  [org.clojure/tools.logging "0.3.1"]
-                  [com.hazelcast/hazelcast "3.10.2"]
-                  [com.hazelcast/hazelcast-client "3.10.2"]
-                  [org.hface/hface-client "0.1.5"]
+  :dependencies '[[org.clojure/clojure "1.10.1"]
+                  [org.clojure/tools.logging "0.4.1"]
+                  [com.hazelcast/hazelcast "3.12.1"]
+                  [com.hazelcast/hazelcast-client "3.12.1"]
+                  [org.hface/hface-client "0.1.6"]
                   [cheshire "5.6.3"]
                   [com.cognitect/transit-clj "0.8.275"]
                   [clj-wallhack "1.0.1"]
@@ -14,7 +14,7 @@
                   ;; boot clj
                   [boot/core               "2.7.1"           :scope "provided"]
                   [adzerk/boot-logservice  "1.2.0"           :scope "test"]
-                  [adzerk/bootlaces        "0.1.13"          :scope "test"]])
+                  [adzerk/bootlaces        "0.2.0"           :scope "test"]])
 
 (require '[adzerk.bootlaces :refer :all]
          '[clojure.tools.logging :as log]

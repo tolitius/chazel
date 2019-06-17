@@ -3,14 +3,14 @@
             [clojure.tools.logging :refer [error]])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
 
-(def ^:const byte-array-type 
+(def ^:const byte-array-type
   (type (byte-array 0)))
 
-(defn bytes? [x] 
+(defn bytes? [x]
   (= (type x) byte-array-type))
 
 (defn transit-out
-  ([data] 
+  ([data]
    (transit-out data :json {}))
   ([x t opts]
     (let [baos (ByteArrayOutputStream.)
@@ -21,7 +21,7 @@
       ret)))
 
 (defn transit-in
-  ([data] 
+  ([data]
    (transit-in data :json {}))
   ([x t opts]
     (if (bytes? x)

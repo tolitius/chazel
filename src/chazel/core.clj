@@ -9,7 +9,7 @@
            [com.hazelcast.topic ReliableMessageListener]
            [com.hazelcast.query SqlPredicate PagingPredicate]
            [com.hazelcast.client HazelcastClient]
-           [com.hazelcast.client.impl HazelcastClientProxy]
+           [com.hazelcast.client.impl.clientside HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
            [com.hazelcast.config Config GroupConfig
                                  InMemoryFormat
@@ -18,7 +18,10 @@
            [com.hazelcast.map.listener EntryAddedListener
                                        EntryRemovedListener
                                        EntryEvictedListener
-                                       EntryUpdatedListener]
+                                       EntryUpdatedListener
+                                       EntryLoadedListener
+                                       EntryExpiredListener
+                                       EntryMergedListener]
            [com.hazelcast.instance HazelcastInstanceProxy]
            [org.hface InstanceStatsTask]))
 
@@ -429,6 +432,27 @@
    (reify
      EntryEvictedListener
      (^void entryEvicted [this ^EntryEvent entry]
+       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+
+(defn entry-expired-listener [f]
+ (when (fn? f)
+   (reify
+     EntryExpiredListener
+     (^void entryExpired [this ^EntryEvent entry]
+       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+
+(defn entry-loaded-listener [f]
+ (when (fn? f)
+   (reify
+     EntryLoadedListener
+     (^void entryLoaded [this ^EntryEvent entry]
+       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+
+(defn entry-merged-listener [f]
+ (when (fn? f)
+   (reify
+     EntryMergedListener
+     (^void entryMerged [this ^EntryEvent entry]
        (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
 
 (deftype Rtask [fun]
