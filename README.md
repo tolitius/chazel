@@ -960,13 +960,19 @@ Hazelcast has map entry listeners which can be attached to maps and listen on di
 * entry updated
 * entry removed
 * entry evicted
+* entry expired
+* entry loaded
+* entry merged
 
-chazel has all 4 listeners available as wrapper functions and ready to roll:
+chazel has all 7 listeners available as wrapper functions and ready to roll:
 
 * entry-added-listener
 * entry-updated-listener
 * entry-removed-listener
 * entry-evicted-listener
+* entry-expired-listener
+* entry-loaded-listener
+* entry-merged-listener
 
 A chazel map entry listener would take a function and apply it every time the event takes place:
 
