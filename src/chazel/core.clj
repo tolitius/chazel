@@ -107,7 +107,7 @@
                            retry-max 720000
                            group-name "dev"
                            group-password "dev-pass"
-                           smart-routing false}}]
+                           smart-routing true}}]
   (let [config (ClientConfig.)
         groupConfig (GroupConfig. group-name group-password)
         near-cache (when near-cache
