@@ -101,12 +101,13 @@
     (call .setCacheLocalEntries config cache-local-entries)
     config))
 
-(defn client-config [{:keys [hosts retry-ms retry-max group-name group-password near-cache]
+(defn client-config [{:keys [hosts retry-ms retry-max group-name group-password near-cache smart-routing]
                       :or {hosts ["127.0.0.1"]
                            retry-ms 5000
                            retry-max 720000
                            group-name "dev"
-                           group-password "dev-pass"}}]
+                           group-password "dev-pass"
+                           smart-routing true}}]
   (let [config (ClientConfig.)
         groupConfig (GroupConfig. group-name group-password)
         near-cache (when near-cache
@@ -115,7 +116,8 @@
       (.getNetworkConfig)
       (.addAddress (into-array hosts))
       (.setConnectionAttemptPeriod retry-ms)
-      (.setConnectionAttemptLimit retry-max))
+      (.setConnectionAttemptLimit retry-max)
+      (.setSmartRouting smart-routing))
     (.setGroupConfig config groupConfig)
     (call .addNearCacheConfig config near-cache)  ;; only set near cache config if provided
     config))
