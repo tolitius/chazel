@@ -101,7 +101,6 @@
   ([creds]
    (with-creds creds (Config.)))
   ([{:keys [group-name group-password]} config]
-   (println group-name group-password )
    (let [group-config (GroupConfig. group-name group-password)]
      (condp instance? config
        Config       (.setGroupConfig ^Config config group-config)
@@ -171,8 +170,7 @@
      ci
      (try
        (info "connecting to: " (secrefy conf))
-       (reset! c-instance
-               (HazelcastClient/newHazelcastClient (client-config conf)))
+       (reset! c-instance (HazelcastClient/newHazelcastClient (client-config conf)))
        (catch Throwable t
          (warn "could not create hazelcast a client instance: " t))))))
 
@@ -233,12 +231,6 @@
   (-> instance
       local-member-by-instance
       (.setStringAttribute k v)))
-
-#_(defn members-by-instance
-  [instance]
-  (-> instance
-      (.getCluster)
-      (.getLocalMember)))
 
 (defn hz-list
   ([m]
@@ -545,27 +537,34 @@
     (onResponse [this response]
       (on-response response))))
 
-(defn task [fun & args]
+(defn task
+  [fun & args]
   (let [{:keys [^IExecutorService exec-svc members]} (apply task-args args)]
     (if (= :all members)
       (.executeOnAllMembers exec-svc (Rtask. fun))
       (.execute exec-svc (Rtask. fun)))))
 
-(defn ftask [fun & args]
-  (let [{:keys [^IExecutorService exec-svc members callback]} (apply task-args args)]
+(defn ftask
+  [fun & args]
+  (let [{:keys [^IExecutorService exec-svc members callback]} (apply task-args args)
+        ctask (Ctask. fun)]
     (if (= :all members)
-      (.submitToAllMembers exec-svc (Ctask. fun))    ;; TODO: add MultiExecutionCallback
+      (.submitToAllMembers exec-svc ctask)    ;; TODO: add MultiExecutionCallback
       (if callback
-        (.submit exec-svc
-                 (Ctask. fun)
-                 (execution-callback callback))
-        (.submit exec-svc
-                 (Ctask. fun))))))
+        (.submit exec-svc ctask (execution-callback callback))
+        (.submit exec-svc ctask)))))
 
-(defn mtake [n m]
-  (into {} (take n (hz-map m))))
+(defn mtake
+  ([m]
+   (mtake :all m))
+  ([n m]
+   (let [xform (if (= :all n)
+                 (map identity)
+                 (take n))]
+     (into {} xform (hz-map m)))))
 
-(defn ->mtake [n mname]                 ;; for clients
+(defn ->mtake
+  [n mname]                 ;; for clients
   @(ftask (partial mtake n mname)))
 
 ;; to be a bit more explicit about these tasks (their futures) problems
