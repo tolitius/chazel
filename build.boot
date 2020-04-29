@@ -7,7 +7,7 @@
                   [com.hazelcast/hazelcast "3.12.1"]
                   [com.hazelcast/hazelcast-client "3.12.1"]
                   [org.hface/hface-client "0.1.6"]
-                  [cheshire "5.6.3"]
+                  [org.clojure/data.json "1.0.0"]
                   [com.cognitect/transit-clj "0.8.275"]
                   [clj-wallhack "1.0.1"]
 

@@ -1,11 +1,10 @@
 (ns chazel.core
-  (:require [wall.hack :refer [field]]
-            [cheshire.core :refer [parse-string]]
+  (:require [clojure.data.json :as json]
             [clojure.tools.logging :refer [warn info error]])
-  (:import [java.util Collection Map]
+  (:import [java.util Collection Map Comparator]
            [java.io Serializable]
            [java.util.concurrent Callable]
-           [com.hazelcast.core Hazelcast IMap ICollection EntryEvent ITopic Message MessageListener ExecutionCallback]
+           [com.hazelcast.core Hazelcast IMap ICollection EntryEvent ITopic Message MessageListener ExecutionCallback HazelcastInstance Cluster IExecutorService LifecycleService Member]
            [com.hazelcast.topic ReliableMessageListener]
            [com.hazelcast.query SqlPredicate PagingPredicate]
            [com.hazelcast.client HazelcastClient]
@@ -21,12 +20,18 @@
                                        EntryUpdatedListener
                                        EntryLoadedListener
                                        EntryExpiredListener
-                                       EntryMergedListener]
+                                       EntryMergedListener MapListener]
            [com.hazelcast.instance HazelcastInstanceProxy]
-           [org.hface InstanceStatsTask]))
+           [org.hface InstanceStatsTask]
+           (com.hazelcast.topic.impl.reliable ReliableTopicProxy)))
+
+(defmacro k->enum
+  [t k]
+  `(some->> ~k name (. java.lang.Enum ~'valueOf ~t)))
 
 (defn new-instance
-  ([] (new-instance nil))
+  ([]
+   (new-instance nil))
   ([conf]
     (Hazelcast/newHazelcastInstance conf)))
 
@@ -34,218 +39,227 @@
   (Hazelcast/getAllHazelcastInstances))
 
 (defn hz-instance
-  ([]
+  (^HazelcastInstance []
      (or (first (all-instances))
          (new-instance)))
-  ([conf]
+  (^HazelcastInstance [conf]
     (Hazelcast/getOrCreateHazelcastInstance conf)))
 
-(defmacro call [m o v]
-  "calls (m o v) iff v is there"
-  `(when ~v
-     (~m ~o ~v)))
+(defn eviction-config
+  ^EvictionConfig
+  [{:keys [eviction-policy
+           max-size-policy
+           size]}]
+  (let [max-size-policy (k->enum EvictionConfig$MaxSizePolicy max-size-policy)
+        eviction-policy (k->enum EvictionPolicy eviction-policy)]
 
-(defmacro k->enum [value-of k]
-  "calls (enum/valueOf k) iff k is there"
-  `(when ~k
-     (~value-of (name ~k))))
+    (cond-> (EvictionConfig.)
+            max-size-policy (.setMaximumSizePolicy max-size-policy)
+            eviction-policy (.setEvictionPolicy eviction-policy)
+            size            (.setSize size))))
 
-(defn eviction-config [{:keys [eviction-policy
-                               max-size-policy
-                               size]}]
-  (let [config (EvictionConfig.)
-        max-size-policy (k->enum EvictionConfig$MaxSizePolicy/valueOf
-                                 max-size-policy)
-        eviction-policy (k->enum EvictionPolicy/valueOf
-                                 eviction-policy)]
-    (call .setMaximumSizePolicy config max-size-policy)
-    (call .setEvictionPolicy config eviction-policy)
-    (call .setSize config size)
-    config))
+(defn preloader-config
+  ^NearCachePreloaderConfig
+  [{:keys [enabled
+           directory
+           store-initial-delay-seconds
+           store-interval-seconds]}]
+  (cond-> (NearCachePreloaderConfig.)
+          enabled                     (.setEnabled enabled)
+          directory                   (.setDirectory directory)
+          store-initial-delay-seconds (.setStoreInitialDelaySeconds store-initial-delay-seconds)
+          store-interval-seconds      (.setStoreIntervalSeconds store-interval-seconds)))
 
-(defn preloader-config [{:keys [enabled
-                                directory
-                                store-initial-delay-seconds
-                                store-interval-seconds]}]
-  (let [config (NearCachePreloaderConfig.)]
-    (call .setEnabled config enabled)
-    (call .setDirectory config directory)
-    (call .setStoreInitialDelaySeconds config store-initial-delay-seconds)
-    (call .setStoreIntervalSeconds config store-interval-seconds)
-    config))
-
-(defn near-cache-config [{:keys [name
-                                 eviction
-                                 preloader
-                                 in-memory-format
-                                 invalidate-on-change
-                                 time-to-live-seconds
-                                 max-idle-seconds
-                                 cache-local-entries
-                                 local-update-policy]}]
-  (let [config (NearCacheConfig.)
-        eviction (when eviction (eviction-config eviction))
-        preloader (when preloader (preloader-config preloader))
-        local-update-policy (k->enum NearCacheConfig$LocalUpdatePolicy/valueOf
-                                     local-update-policy)
-        in-memory-format (k->enum InMemoryFormat/valueOf
-                                  in-memory-format)]
-    (call .setName config name)
-    (call .setEvictionConfig config eviction)
-    (call .setPreloaderConfig config preloader)
-    (call .setInMemoryFormat config in-memory-format)
-    (call .setInvalidateOnChange config invalidate-on-change)
-    (call .setTimeToLiveSeconds config time-to-live-seconds)
-    (call .setMaxIdleSeconds config max-idle-seconds)
-    (call .setLocalUpdatePolicy config local-update-policy)
-    (call .setCacheLocalEntries config cache-local-entries)
-    config))
-
-(defn client-config [{:keys [hosts retry-ms retry-max group-name group-password near-cache smart-routing]
-                      :or {hosts ["127.0.0.1"]
-                           retry-ms 5000
-                           retry-max 720000
-                           group-name "dev"
-                           group-password "dev-pass"
-                           smart-routing true}}]
-  (let [config (ClientConfig.)
-        groupConfig (GroupConfig. group-name group-password)
-        near-cache (when near-cache
-                     (near-cache-config near-cache))]
-    (doto config
-      (.getNetworkConfig)
-      (.addAddress (into-array hosts))
-      (.setConnectionAttemptPeriod retry-ms)
-      (.setConnectionAttemptLimit retry-max)
-      (.setSmartRouting smart-routing))
-    (.setGroupConfig config groupConfig)
-    (call .addNearCacheConfig config near-cache)  ;; only set near cache config if provided
-    config))
+(defn near-cache-config
+  ^NearCacheConfig
+  [{:keys [^String name
+           eviction
+           preloader
+           in-memory-format
+           invalidate-on-change
+           time-to-live-seconds
+           max-idle-seconds
+           cache-local-entries
+           local-update-policy]}]
+  (let [^EvictionConfig eviction            (some-> eviction  eviction-config)
+        ^NearCachePreloaderConfig preloader (some-> preloader preloader-config)
+        ^NearCacheConfig$LocalUpdatePolicy local-update-policy (k->enum NearCacheConfig$LocalUpdatePolicy
+                                                                        local-update-policy)
+        ^InMemoryFormat in-memory-format (k->enum InMemoryFormat in-memory-format)]
+    (cond-> (NearCacheConfig.)
+            name                 (.setName name)
+            eviction             (.setEvictionConfig eviction)
+            preloader            (.setPreloaderConfig preloader)
+            in-memory-format     (.setInMemoryFormat in-memory-format)
+            invalidate-on-change (.setInvalidateOnChange invalidate-on-change)
+            time-to-live-seconds (.setTimeToLiveSeconds time-to-live-seconds)
+            max-idle-seconds     (.setMaxIdleSeconds max-idle-seconds)
+            local-update-policy  (.setLocalUpdatePolicy local-update-policy)
+            cache-local-entries  (.setCacheLocalEntries cache-local-entries))))
 
 (defn with-creds
   ([creds]
    (with-creds creds (Config.)))
   ([{:keys [group-name group-password]} config]
-   (.setGroupConfig config (GroupConfig. group-name
-                                         group-password))))
+   (let [group-config (GroupConfig. group-name group-password)]
+     (condp instance? config
+       Config       (.setGroupConfig ^Config config group-config)
+       ClientConfig (.setGroupConfig ^ClientConfig config group-config)
+       ;; reflective call (the only one and will probably never be reached anyway)
+       (.setGroupConfig config group-config)))))
+
+(defn client-config
+  ^ClientConfig
+  [{:keys [hosts retry-ms retry-max group-name group-password near-cache smart-routing]
+    :or {hosts ["127.0.0.1"]
+         retry-ms 5000
+         retry-max 720000
+         group-name "dev"
+         group-password "dev-pass"
+         smart-routing true}}]
+  (let [^ClientConfig config (with-creds
+                               {:group-name group-name
+                                :group-password group-password}
+                               (ClientConfig.))
+        ^NearCacheConfig near-cache (some-> near-cache near-cache-config)]
+    (-> config
+      (.getNetworkConfig)
+      (.addAddress (into-array String hosts))
+      (.setConnectionAttemptPeriod retry-ms)
+      (.setConnectionAttemptLimit retry-max)
+      (.setSmartRouting smart-routing))
+
+    (cond-> config near-cache (.addNearCacheConfig near-cache)))) ;; only set near cache config if provided
+
 
 (defn with-near-cache
   ([nc-config map-name]
    (with-near-cache nc-config map-name (Config.)))
-  ([nc-config map-name hz-config]
-   (.setNearCacheConfig (.getMapConfig hz-config map-name)
-                        (near-cache-config nc-config))
+  ([nc-config map-name ^Config hz-config]
+   (-> hz-config
+       (.getMapConfig map-name)
+       (.setNearCacheConfig (near-cache-config nc-config)))
    hz-config))
 
-(defn instance-active? [instance]
-  (-> instance
-      (.getLifecycleService)
-      (.isRunning)))
+(defn instance-active?
+  "Checks that the provided <instance> is running,
+   and if so returns it - otherwise returns falsey."
+  [^HazelcastInstance instance]
+  (and (some-> instance .getLifecycleService .isRunning)
+       instance))
 
 (defonce c-instance (atom nil))
 
-(defn secrefy [{:keys [group-name
-                       group-password] :as conf}]
-  (-> conf
-      (cond-> group-name (assoc :group-name "********")
-              group-password (assoc :group-password "********"))))
+(def client-instance?
+  "Checks that the current instance is running
+   via `instance-active?`."
+  (comp instance-active? (partial deref c-instance)))
+
+(defn secrefy
+  [{:keys [group-name
+           group-password] :as conf}]
+  (cond-> conf
+          group-name     (assoc :group-name "********")
+          group-password (assoc :group-password "********")))
 
 (defn client-instance
-  ([] (client-instance {}))
+  ([]
+   (client-instance {}))
   ([conf]
-    (let [ci @c-instance]
-      (if (and ci (instance-active? ci))
-        ci
-        (try
-          (info "connecting to: " (secrefy conf))
-          (reset! c-instance
-                  (HazelcastClient/newHazelcastClient (client-config conf)))
-          (catch Throwable t
-            (warn "could not create hazelcast a client instance: " t)))))))
+   (if-let [ci (client-instance?)]
+     ci
+     (try
+       (info "connecting to: " (secrefy conf))
+       (reset! c-instance (HazelcastClient/newHazelcastClient (client-config conf)))
+       (catch Throwable t
+         (warn "could not create hazelcast a client instance: " t))))))
 
-(defn client-instance? []
-  (let [ci @c-instance]
-    (and ci (instance-active? ci))))
+
 
 ;; creates a demo cluster
-(defn cluster-of [nodes & {:keys [conf]}]
-  (repeatedly nodes #(new-instance conf)))
+(defn cluster-of
+  [nodes & {:keys [conf]}]
+  (repeatedly nodes (partial new-instance conf)))
 
-(defn distributed-objects [hz-instance]
+(defn distributed-objects
+  [^HazelcastInstance hz-instance]
   (.getDistributedObjects hz-instance))
 
 (defn find-all-maps
-  ([] (find-all-maps (hz-instance)))
+  ([]
+   (find-all-maps (hz-instance)))
   ([instance]
-  (filter #(instance? com.hazelcast.core.IMap %)
+  (filter (partial instance? IMap)
           (distributed-objects instance))))
 
 (defn map-sizes
-  ([] (map-sizes (hz-instance)))
+  ([]
+   (map-sizes (hz-instance)))
   ([instance]
-  (reduce (fn [m o]
-            (if (instance? com.hazelcast.core.IMap o)
-              (assoc m (.getName o) {:size (.size o)})
-              m)) {} (distributed-objects instance))))
+   (into {}
+         (keep
+           (fn [o]
+             (when (instance? IMap o)
+               [(.getName ^IMap o)
+                {:size (.size ^IMap o)}])))
+         (distributed-objects instance))))
 
 (defn cluster-stats
-  ([] (cluster-stats (hz-instance)))
-  ([instance]
+  ([]
+   (cluster-stats (hz-instance)))
+  ([^HazelcastInstance instance]
    (try
-     (as-> instance $
-           (.getExecutorService $ "stats-exec-service")
-           (.submitToAllMembers $ (InstanceStatsTask.))
-           (for [[m f] $]
-             [(str m) (parse-string @f true)])
-           (into {} $))
+     (into {}
+           (map
+             (fn [[m f]]
+               [(str m)
+                (json/read-str @f :key-fn keyword)]))
+           (-> instance
+               (.getExecutorService "stats-exec-service")
+               (.submitToAllMembers (InstanceStatsTask.))))
      (catch Throwable t
        (warn "could not submit a \"collecting stats\" task via hazelcast instance [" instance "]: " (.getMessage t))))))
 
+
+(defn local-member-by-instance
+  ^Member [^HazelcastInstance instance]
+  (-> instance .getCluster .getLocalMember))
+
 ;; adds a string kv pair to the local member of this hazelcast instance
-(defn add-member-attr [instance k v]
+(defn add-member-attr
+  [instance k v]
   (-> instance
-    (.getCluster)
-    (.getLocalMember)
-    (.setStringAttribute k v)))
-
-(defn local-member-by-instance [instance]
-  (-> instance
-    (.getCluster)
-    (.getLocalMember)))
-
-(defn members-by-instance [instance]
-  (-> instance
-    (.getCluster)
-    (.getLocalMember)))
+      local-member-by-instance
+      (.setStringAttribute k v)))
 
 (defn hz-list
   ([m]
     (hz-list (name m) (hz-instance)))
-  ([m instance]
+  ([m ^HazelcastInstance instance]
     (.getList instance (name m))))
 
 (defn hz-map
   ([m]
     (hz-map (name m) (hz-instance)))
-  ([m instance]
+  ([m ^HazelcastInstance instance]
     (.getMap instance (name m))))
 
 (defn hz-mmap
   ([m]
     (hz-mmap (name m) (hz-instance)))
-  ([m instance]
+  ([m ^HazelcastInstance instance]
     (.getMultiMap instance (name m))))
 
 (defn hz-queue
   ([m]
     (hz-queue (name m) (hz-instance)))
-  ([m instance]
+  ([m ^HazelcastInstance instance]
     (.getQueue instance (name m))))
 
-(defn ^ITopic hz-reliable-topic
-  ([t]
+(defn hz-reliable-topic
+  (^ITopic [t]
     (hz-reliable-topic (name t) (hz-instance)))
-  ([t instance]
+  (^ITopic [t ^HazelcastInstance instance]
     (.getReliableTopic instance (name t))))
 
 (defn message-listener [f]
@@ -255,20 +269,21 @@
         (^void onMessage [this ^Message msg]
           (f (.getMessageObject msg))))))     ;; TODO: {:msg :member :timestamp}
 
-(defn reliable-message-listener [f {:keys [start-from store-seq loss-tolerant? terminal?]
-                                    :or {start-from -1 store-seq identity loss-tolerant? false terminal? true}}]
+(defn reliable-message-listener
+  [f {:keys [start-from store-seq loss-tolerant? terminal?]
+      :or {start-from -1 store-seq identity loss-tolerant? false terminal? true}}]
   (when (fn? f)
     (reify
       ReliableMessageListener
-        (^long retrieveInitialSequence [this] start-from)
-        (^void storeSequence [this ^long sq] (store-seq sq))
-        (^boolean isLossTolerant [this] loss-tolerant?)
-        (^boolean isTerminal [this ^Throwable failure]
-          (throw failure)
-          terminal?)
+      (^long retrieveInitialSequence [this] start-from)
+      (^void storeSequence [this ^long sq] (store-seq sq))
+      (^boolean isLossTolerant [this] loss-tolerant?)
+      (^boolean isTerminal [this ^Throwable failure]
+        (throw failure)
+        terminal?)
       MessageListener
-        (^void onMessage [this ^Message msg]
-          (f (.getMessageObject msg))))))     ;; TODO: {:msg :member :timestamp}
+      (^void onMessage [this ^Message msg]
+        (f (.getMessageObject msg))))))     ;; TODO: {:msg :member :timestamp}
 
 (defprotocol Topic
   (add-message-listener [t f])
@@ -283,7 +298,7 @@
 ;; reason for both "add-message-listener" and "add-reliable-listener": http://dev.clojure.org/jira/browse/CLJ-1024
 ;; i.e. can't do: "(add-message-listener t f & opts)" in protocol
 
-(extend-type com.hazelcast.topic.impl.reliable.ReliableTopicProxy
+(extend-type ReliableTopicProxy
   ReliableTopic
   (add-reliable-listener [t f opts]
     (.addMessageListener t (reliable-message-listener f opts)))
@@ -299,19 +314,22 @@
   (hz-name [t]
     (.getName t)))
 
-(defn proxy-to-instance [p]
+(defn unproxy
+  [p]
   (condp instance? p
-    HazelcastInstanceProxy (field HazelcastInstanceProxy :original p)
-    HazelcastClientProxy (field HazelcastClientProxy :client p)
+    HazelcastInstanceProxy (.getOriginal ^HazelcastInstanceProxy p)
+    HazelcastClientProxy (.client ^HazelcastClientProxy p)
     p))
 
-(defn shutdown-client [instance]
-  (HazelcastClient/shutdown instance))
+(defn shutdown-client
+  [instance]
+  (if (string? instance)
+    (HazelcastClient/shutdown ^String instance)
+    (HazelcastClient/shutdown ^HazelcastInstance instance)))
 
-(defn shutdown []
-  (let [instance (hz-instance)]
-    (when instance
-      (.shutdown instance))))
+(defn shutdown
+  []
+  (some-> (hz-instance) .shutdown))
 
 (defn put!
   ([^IMap m k v f]
@@ -325,16 +343,20 @@
   ([^IMap m k]
     (.get m k)))
 
-(defn put-all! [^IMap dest ^Map src]
+(defn put-all!
+  [^IMap dest ^Map src]
   (.putAll dest src))
 
-(defn remove! [^IMap m k]
+(defn remove!
+  [^IMap m k]
   (.remove m k))
 
-(defn delete! [^IMap m k]
+(defn delete!
+  [^IMap m k]
   (.delete m k))
 
-(defn add-all! [^ICollection hc ^Collection c]
+(defn add-all!
+  [^ICollection hc ^Collection c]
   (.addAll hc c))
 
 (defn add-index
@@ -343,7 +365,8 @@
   ([^IMap m index ordered?]
    (.addIndex m index ordered?)))
 
-(defn- run-query [m where as pred]
+(defn- run-query
+  [^IMap m where as pred]
   (case as
     :set (into #{} (if pred (.values m pred)
                             (.values m)))
@@ -361,101 +384,122 @@
 (deftype Pages [m where as pred]
   Pageable
   (next-page [_]
-             (.nextPage pred)
-             (run-query m where as pred)))
+    (.nextPage ^PagingPredicate pred)
+    (run-query m where as pred)))
 
 (def comp-keys
-  (comparator (fn [a b]
-                (> (compare (.getKey a)
-                            (.getKey b))
-                   0))))
+  (comparator
+    (fn [^EntryEvent a ^EntryEvent b]
+      (pos?
+        (compare
+          (.getKey a)
+          (.getKey b))))))
 
-(defn with-paging [n & {:keys [order-by pred]
-                        :or {order-by comp-keys}}]
-  (if-not pred
-    (PagingPredicate. order-by n)
-    (PagingPredicate. pred order-by n)))
+(defn with-paging
+  [^Long n & {:keys [order-by pred]
+              :or {order-by comp-keys}}]
+  (if pred
+    (PagingPredicate. pred order-by n)
+    (PagingPredicate. ^Comparator order-by n)))
 
 ;; TODO: QUERY_RESULT_SIZE_LIMIT
-(defn select [m where & {:keys [as order-by page-size]
-                         :or {as :set
-                              order-by comp-keys}}]
-  (let [sql-pred (if-not (= "*" where)
+(defn select
+  [m where & {:keys [as order-by page-size]
+              :or {as :set
+                   order-by comp-keys}}]
+  (let [sql-pred (when-not (= "*" where)
                    (SqlPredicate. where))
-        pred (if-not page-size
-               sql-pred
-               (with-paging page-size :order-by order-by
-                                      :pred sql-pred))
+        pred (if page-size
+               (with-paging
+                 page-size
+                 :order-by order-by
+                 :pred sql-pred)
+               sql-pred)
         rset (run-query m where as pred)]
-    (if-not page-size
-      rset
-      {:pages (Pages. m where as pred) :results rset})))
+    (if page-size
+      {:pages (Pages. m where as pred)
+       :results rset}
+      rset)))
 
 (defn query-cache
   "continuous query cache: i.e. (query-cache m \"vim-cache\" \"editor = vim\")"
-  ([m cname]
+  ([^IMap m cname]
    (.getQueryCache m cname))
   ([m cname pred]
    (query-cache m cname pred true))
-  ([m cname pred include-value?]
+  ([^IMap m cname pred include-value?]
    (.getQueryCache m cname (SqlPredicate. pred) include-value?))
-  ([m cname pred listener include-value?]
+  ([^IMap m cname pred listener include-value?]
    (.getQueryCache m cname listener (SqlPredicate. pred) include-value?)))
 
-(defn add-entry-listener [m ml]
+(defn add-entry-listener
+  ^String [^IMap m ^MapListener ml]
   (.addEntryListener m ml true))
 
-(defn remove-entry-listener [m listener-id]
+(defn remove-entry-listener
+  [^IMap m ^String listener-id]
   (.removeEntryListener m listener-id))
+
+(defn- entry-op*
+  [op ^EntryEvent entry]
+  (op (.getKey entry)
+      (.getValue entry)
+      (.getOldValue entry)))
 
 (defn entry-added-listener [f]
   (when (fn? f)
     (reify
       EntryAddedListener
         (^void entryAdded [this ^EntryEvent entry]
-          (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+          (entry-op* f entry)))))
 
-(defn entry-removed-listener [f]
+(defn entry-removed-listener
+  [f]
   (when (fn? f)
     (reify
       EntryRemovedListener
         (^void entryRemoved [this ^EntryEvent entry]
-          (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+          (entry-op* f entry)))))
 
-(defn entry-updated-listener [f]
+(defn entry-updated-listener
+  [f]
   (when (fn? f)
     (reify
       EntryUpdatedListener
         (^void entryUpdated [this ^EntryEvent entry]
-          (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+          (entry-op* f entry)))))
 
-(defn entry-evicted-listener [f]
+(defn entry-evicted-listener
+  [f]
  (when (fn? f)
    (reify
      EntryEvictedListener
      (^void entryEvicted [this ^EntryEvent entry]
-       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+       (entry-op* f entry)))))
 
-(defn entry-expired-listener [f]
+(defn entry-expired-listener
+  [f]
  (when (fn? f)
    (reify
      EntryExpiredListener
      (^void entryExpired [this ^EntryEvent entry]
-       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+       (entry-op* f entry)))))
 
-(defn entry-loaded-listener [f]
+(defn entry-loaded-listener
+  [f]
  (when (fn? f)
    (reify
      EntryLoadedListener
      (^void entryLoaded [this ^EntryEvent entry]
-       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+       (entry-op* f entry)))))
 
-(defn entry-merged-listener [f]
+(defn entry-merged-listener
+  [f]
  (when (fn? f)
    (reify
      EntryMergedListener
      (^void entryMerged [this ^EntryEvent entry]
-       (f (.getKey entry) (.getValue entry) (.getOldValue entry))))))
+       (entry-op* f entry)))))
 
 (deftype Rtask [fun]
   Serializable
@@ -469,18 +513,23 @@
   Callable
   (call [_] (fun)))
 
-(defn- task-args [& {:keys [members instance es-name]
-                     :or {members :any
-                          instance (if (client-instance?)
-                                     (client-instance)
-                                     (hz-instance))
-                          es-name :default}
-                     :as args}]
-  (assoc args :exec-svc (.getExecutorService instance (name es-name))))
+(defn- task-args
+  [& {:keys [members instance es-name]
+      :or {members :any
+           instance (if-let [ci (client-instance?)]
+                      ci
+                      (hz-instance))
+           es-name :default}
+      :as args}]
+  (assoc args
+    :exec-svc
+    (.getExecutorService ^HazelcastInstance instance (name es-name))))
 
-(defn execution-callback [{:keys [on-response on-failure]
-                           :or {on-response identity
-                                on-failure identity}}]
+(defn execution-callback
+  ^ExecutionCallback
+  [{:keys [on-response on-failure]
+    :or {on-response identity
+         on-failure identity}}]
   (reify
     ExecutionCallback
     (onFailure [this throwable]
@@ -488,27 +537,34 @@
     (onResponse [this response]
       (on-response response))))
 
-(defn task [fun & args]
-  (let [{:keys [exec-svc members]} (apply task-args args)]
+(defn task
+  [fun & args]
+  (let [{:keys [^IExecutorService exec-svc members]} (apply task-args args)]
     (if (= :all members)
       (.executeOnAllMembers exec-svc (Rtask. fun))
       (.execute exec-svc (Rtask. fun)))))
 
-(defn ftask [fun & args]
-  (let [{:keys [exec-svc members callback]} (apply task-args args)]
+(defn ftask
+  [fun & args]
+  (let [{:keys [^IExecutorService exec-svc members callback]} (apply task-args args)
+        ctask (Ctask. fun)]
     (if (= :all members)
-      (.submitToAllMembers exec-svc (Ctask. fun))    ;; TODO: add MultiExecutionCallback
+      (.submitToAllMembers exec-svc ctask)    ;; TODO: add MultiExecutionCallback
       (if callback
-        (.submit exec-svc
-                 (Ctask. fun)
-                 (execution-callback callback))
-        (.submit exec-svc
-                 (Ctask. fun))))))
+        (.submit exec-svc ctask (execution-callback callback))
+        (.submit exec-svc ctask)))))
 
-(defn mtake [n m]
-  (into {} (take n (hz-map m))))
+(defn mtake
+  ([m]
+   (mtake :all m))
+  ([n m]
+   (let [xform (if (= :all n)
+                 (map identity)
+                 (take n))]
+     (into {} xform (hz-map m)))))
 
-(defn ->mtake [n mname]                 ;; for clients
+(defn ->mtake
+  [n mname]                 ;; for clients
   @(ftask (partial mtake n mname)))
 
 ;; to be a bit more explicit about these tasks (their futures) problems

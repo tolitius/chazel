@@ -3,11 +3,6 @@
             [clojure.tools.logging :refer [error]])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
 
-(def ^:const byte-array-type
-  (type (byte-array 0)))
-
-(defn bytes? [x]
-  (= (type x) byte-array-type))
 
 (defn transit-out
   ([data]
