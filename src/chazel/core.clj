@@ -1,18 +1,34 @@
 (ns chazel.core
   (:require [clojure.data.json :as json]
             [clojure.tools.logging :refer [warn info error]])
-  (:import [java.util Collection Map Comparator]
+  (:import [java.util Collection Map Comparator AbstractMap$SimpleImmutableEntry]
            [java.io Serializable]
            [java.util.concurrent Callable]
-           [com.hazelcast.core Hazelcast IMap ICollection EntryEvent ITopic Message MessageListener ExecutionCallback HazelcastInstance Cluster IExecutorService LifecycleService Member]
-           [com.hazelcast.topic ReliableMessageListener]
-           [com.hazelcast.query SqlPredicate PagingPredicate]
+           [com.hazelcast.core Hazelcast
+                               EntryEvent
+                               ExecutionCallback
+                               HazelcastInstance
+                               IExecutorService
+                               LifecycleService]
+           [com.hazelcast.map IMap]
+           [com.hazelcast.collection ICollection]
+           [com.hazelcast.topic ReliableMessageListener
+                                ITopic
+                                Message
+                                MessageListener]
+           [com.hazelcast.cluster Cluster
+                                  Member]
+           [com.hazelcast.query.impl.predicates SqlPredicate]
+           [com.hazelcast.query Predicates PagingPredicate]
            [com.hazelcast.client HazelcastClient]
            [com.hazelcast.client.impl.clientside HazelcastClientProxy]
            [com.hazelcast.client.config ClientConfig]
-           [com.hazelcast.config Config GroupConfig
+           [com.hazelcast.config Config
+                                 IndexConfig
+                                 IndexType
+                                 MaxSizePolicy
                                  InMemoryFormat
-                                 EvictionConfig EvictionPolicy EvictionConfig$MaxSizePolicy
+                                 EvictionConfig EvictionPolicy EvictionConfig
                                  NearCacheConfig NearCachePreloaderConfig NearCacheConfig$LocalUpdatePolicy]
            [com.hazelcast.map.listener EntryAddedListener
                                        EntryRemovedListener
@@ -21,7 +37,7 @@
                                        EntryLoadedListener
                                        EntryExpiredListener
                                        EntryMergedListener MapListener]
-           [com.hazelcast.instance HazelcastInstanceProxy]
+           [com.hazelcast.instance.impl HazelcastInstanceProxy]
            [org.hface InstanceStatsTask]
            (com.hazelcast.topic.impl.reliable ReliableTopicProxy)))
 
@@ -50,7 +66,7 @@
   [{:keys [eviction-policy
            max-size-policy
            size]}]
-  (let [max-size-policy (k->enum EvictionConfig$MaxSizePolicy max-size-policy)
+  (let [max-size-policy (k->enum MaxSizePolicy max-size-policy)
         eviction-policy (k->enum EvictionPolicy eviction-policy)]
 
     (cond-> (EvictionConfig.)
@@ -97,39 +113,32 @@
             local-update-policy  (.setLocalUpdatePolicy local-update-policy)
             cache-local-entries  (.setCacheLocalEntries cache-local-entries))))
 
-(defn with-creds
-  ([creds]
-   (with-creds creds (Config.)))
-  ([{:keys [group-name group-password]} config]
-   (let [group-config (GroupConfig. group-name group-password)]
-     (condp instance? config
-       Config       (.setGroupConfig ^Config config group-config)
-       ClientConfig (.setGroupConfig ^ClientConfig config group-config)
-       ;; reflective call (the only one and will probably never be reached anyway)
-       (.setGroupConfig config group-config)))))
+(defn connect-to
+  ([cluster]
+   (connect-to cluster (Config.)))
+  ([{:keys [cluster-name]} config]
+   (condp instance? config
+     Config       (.setClusterName ^Config config cluster-name)
+     ClientConfig (.setClusterName ^ClientConfig config cluster-name))))
 
 (defn client-config
   ^ClientConfig
-  [{:keys [hosts retry-ms retry-max group-name group-password near-cache smart-routing]
+  [{:keys [hosts cluster-name near-cache smart-routing]
     :or {hosts ["127.0.0.1"]
-         retry-ms 5000
-         retry-max 720000
-         group-name "dev"
-         group-password "dev-pass"
+         cluster-name "dev"
          smart-routing true}}]
-  (let [^ClientConfig config (with-creds
-                               {:group-name group-name
-                                :group-password group-password}
-                               (ClientConfig.))
+  (let [^ClientConfig config (-> (ClientConfig.)
+                                 (.setClusterName cluster-name))
         ^NearCacheConfig near-cache (some-> near-cache near-cache-config)]
     (-> config
       (.getNetworkConfig)
       (.addAddress (into-array String hosts))
-      (.setConnectionAttemptPeriod retry-ms)
-      (.setConnectionAttemptLimit retry-max)
+      ; (.setConnectionAttemptPeriod retry-ms)   ;; TODO: see how it is done in hazelcast 4.0+
+      ; (.setConnectionAttemptLimit retry-max)
       (.setSmartRouting smart-routing))
 
-    (cond-> config near-cache (.addNearCacheConfig near-cache)))) ;; only set near cache config if provided
+    (cond-> config
+            near-cache (.addNearCacheConfig near-cache)))) ;; only set near cache config if provided
 
 
 (defn with-near-cache
@@ -218,7 +227,7 @@
                (.getExecutorService "stats-exec-service")
                (.submitToAllMembers (InstanceStatsTask.))))
      (catch Throwable t
-       (warn "could not submit a \"collecting stats\" task via hazelcast instance [" instance "]: " (.getMessage t))))))
+       (warn "could not submit a \"collecting stats\" task via hazelcast instance [" instance "]: " t)))))
 
 
 (defn local-member-by-instance
@@ -360,13 +369,17 @@
   (.addAll hc c))
 
 (defn add-index
-  ([^IMap m index]
-   (add-index m index false))
-  ([^IMap m index ordered?]
-   (.addIndex m index ordered?)))
+  ([^IMap m field]
+   (add-index m [field] :hash))
+  ([^IMap m fields itype]
+   (let [index-type (case itype
+                      :sorted (IndexType/SORTED)
+                      :bitmap (IndexType/BITMAP)
+                      IndexType/HASH)]
+     (.addIndex m (IndexConfig. index-type (into-array fields))))))
 
 (defn- run-query
-  [^IMap m where as pred]
+  [m where as pred] ;; m is IMap and sometimes it is QueryCache
   (case as
     :set (into #{} (if pred (.values m pred)
                             (.values m)))
@@ -389,7 +402,7 @@
 
 (def comp-keys
   (comparator
-    (fn [^EntryEvent a ^EntryEvent b]
+    (fn [a b]
       (pos?
         (compare
           (.getKey a)
@@ -399,8 +412,8 @@
   [^Long n & {:keys [order-by pred]
               :or {order-by comp-keys}}]
   (if pred
-    (PagingPredicate. pred order-by n)
-    (PagingPredicate. ^Comparator order-by n)))
+    (Predicates/pagingPredicate pred order-by n)
+    (Predicates/pagingPredicate ^Comparator order-by n)))
 
 ;; TODO: QUERY_RESULT_SIZE_LIMIT
 (defn select
@@ -428,9 +441,9 @@
   ([m cname pred]
    (query-cache m cname pred true))
   ([^IMap m cname pred include-value?]
-   (.getQueryCache m cname (SqlPredicate. pred) include-value?))
+   (.getQueryCache m cname (Predicates/sql pred) include-value?))
   ([^IMap m cname pred listener include-value?]
-   (.getQueryCache m cname listener (SqlPredicate. pred) include-value?)))
+   (.getQueryCache m cname listener (Predicates/sql pred) include-value?)))
 
 (defn add-entry-listener
   ^String [^IMap m ^MapListener ml]

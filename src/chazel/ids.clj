@@ -1,16 +1,10 @@
 (ns chazel.ids
-  (:import (com.hazelcast.core HazelcastInstance IdGenerator)
-           (com.hazelcast.flakeidgen FlakeIdGenerator)))
+  (:import [com.hazelcast.flakeidgen FlakeIdGenerator]))
 
 (defn safe-generator
   ^FlakeIdGenerator
   [^HazelcastInstance hz ^String gname]
   (.getFlakeIdGenerator hz gname))
-
-(defn unsafe-generator ;; DEPRECATED
-  ^IdGenerator
-  [^HazelcastInstance hz ^String gname]
-  (.getIdGenerator hz gname))
 
 (defn new-id!
   "Given a hazelcast instance <hz> and IdGenerator name,
@@ -18,13 +12,9 @@
   argument and default to true. If you choose to pass false
   be aware that the underlying generator has been deprecated."
   (^long [hz]
-   (new-id! hz "IDS" true))
+         (new-id! hz "IDS"))
   (^long [hz generator-name]
-   (new-id! hz generator-name true))
-  (^long [^HazelcastInstance hz generator-name flake?]
-   (if flake?
-     (.newId (safe-generator hz generator-name))
-     (.newId (unsafe-generator hz generator-name)))))
+         (.newId (safe-generator hz generator-name))))
 
 (defn parse-flake-id
   "Parses a FlakeId into its 3 constituent parts."

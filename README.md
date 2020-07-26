@@ -48,15 +48,19 @@ let's start a 3 node cluster
 
 ```clojure
 user=> (cluster-of 3)
-Mar 26, 2015 1:46:43 PM com.hazelcast.cluster.ClusterService
-INFO: [10.36.124.50]:5701 [dev] [3.4.1]
 
-Members [3] {
-    Member [10.36.124.50]:5701 this
-    Member [10.36.124.50]:5702
-    Member [10.36.124.50]:5703
-}
-(#<HazelcastInstanceProxy HazelcastInstance{name='_hzInstance_1_dev', node=Address[10.36.124.50]:5701}> #<HazelcastInstanceProxy HazelcastInstance{name='_hzInstance_2_dev', node=Address[10.36.124.50]:5702}> #<HazelcastInstanceProxy HazelcastInstance{name='_hzInstance_3_dev', node=Address[10.36.124.50]:5703}>)
+Jul 25, 2020 9:47:57 PM com.hazelcast.internal.cluster.ClusterService
+INFO: [192.168.0.107]:5702 [dev] [4.0.2]
+
+Members {size:3, ver:3} [
+	Member [192.168.0.107]:5701 - b48fb15a-ad9d-4ca7-8d8c-461920ee71d6
+	Member [192.168.0.107]:5702 - f050f3b1-71ea-4814-884e-52d150f3781e this
+	Member [192.168.0.107]:5703 - 93f7dad3-4f34-400b-9cf5-58a11c95a59c
+]
+
+("HazelcastInstance{name='confident_mahavira', node=[192.168.0.107]:5701}"]
+ "HazelcastInstance{name='unruffled_mahavira', node=[192.168.0.107]:5702}"]
+ "HazelcastInstance{name='lucid_mahavira', node=[192.168.0.107]:5703}"])
 ```
 
 ## Working with Data Structures
@@ -143,24 +147,13 @@ com.hazelcast.collection.impl.list.ListProxyImpl
 ## Connecting as a Client
 
 ```clojure
-user=> (def c (client-instance {:group-name "dev",
-                                :group-password "dev-pass",
-                                :hosts ["127.0.0.1"],
-                                :retry-ms 5000,
-                                :retry-max 720000}))
+user=> (def c (client-instance {:cluster-name "dev"
+                                :hosts ["127.0.0.1"]}))
 
-INFO: connecting to:  {:group-password dev-pass, :hosts [127.0.0.1], :retry-ms 5000, :retry-max 720000, :group-name dev}
+INFO  chazel.core - connecting to:  {:cluster-name dev, :hosts [127.0.0.1]}
 
 user=> c
-#<HazelcastClientProxy com.hazelcast.client.impl.HazelcastClientInstanceImpl@42b215c8>
-```
-
-In case it could not connect, it would retry according to `:retry-ms` and `:retry-max` values:
-
-```clojure
-WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 1 of 720000.
-WARNING: Unable to get alive cluster connection, try in 5000 ms later, attempt 2 of 720000.
-...
+"com.hazelcast.client.impl.clientside.HazelcastClientInstanceImpl@4786a6b6"
 ```
 
 ## Distributed SQL Queries
@@ -234,7 +227,7 @@ chazel=> (select jedis "name like %Sky% and editor != emacs")
 
 niice!
 
-In case a database / map is large, we can add [field indices](http://docs.hazelcast.org/docs/3.5/manual/html/queryindexing.html)
+In case a database / map is large, we can add [field indices](https://docs.hazelcast.org/docs/4.0.2/manual/html-single/#indexing-queries)
 
 ```clojure
 chazel=> (add-index jedis "editor")
@@ -303,7 +296,7 @@ ERROR: can't return a result of a distributed query as ":foo" (an unknown format
 
 SQL would not be too useful if we could not do things like "I only need first 100 results out of millions you have" or "sort the results by the revenue". In more SQL like speak, these two would be: `LIMIT 100` and `ORDER BY "revenue"`.
 
-Hazelcast supports both through [Paging Predicates](http://docs.hazelcast.org/docs/3.7/manual/html-single/index.html#filtering-with-paging-predicates):
+Hazelcast supports both through [Paging Predicates](https://docs.hazelcast.org/docs/4.0.2/manual/html-single/#filtering-with-paging-predicates):
 
 > _Hazelcast provides paging for defined predicates. With its PagingPredicate class, you can get a collection of keys, values, or entries page by page by filtering them with predicates and giving the size of the pages. Also, you can sort the entries by specifying comparators._
 
@@ -443,7 +436,7 @@ Luke Skywalker comes last in this chapter, but no worries, this is just the begi
 
 ## Continuous Query Cache
 
-A continuous query cache is used to cache the result of a continuous query. After the construction of a continuous query cache, all changes on the underlying IMap are immediately reflected to this cache as a stream of events. Therefore, this cache will be an always up-to-date view of the IMap. You can create a continuous query cache either on the client or member. (_[more](http://docs.hazelcast.org/docs/3.8/manual/html-single/index.html#continuous-query-cache) from Hazelcast docs_)
+A continuous query cache is used to cache the result of a continuous query. After the construction of a continuous query cache, all changes on the underlying IMap are immediately reflected to this cache as a stream of events. Therefore, this cache will be an always up-to-date view of the IMap. You can create a continuous query cache either on the client or member. (_[more](https://docs.hazelcast.org/docs/4.0.2/manual/html-single/#continuous-query-cache) from Hazelcast docs_)
 
 ### Vim Jedis
 
@@ -512,7 +505,7 @@ In case only a `source-map` and a `cache-name` are given, `query-cache` will loo
 
 ```clojure
 => (query-cache jedis "vim-cache")
-#object[com.hazelcast.map.impl.querycache.subscriber.DefaultQueryCache 0x7f61bdeb "com.hazelcast.map.impl.querycache.subscriber.DefaultQueryCacheRecordStore@12579667"]
+#object[com.hazelcast.map.impl.querycache.subscriber.DefaultQueryCache 0x5a6895e5 "DefaultQueryCache{mapName='jedis', cacheId='fd40614a-20e3-4c97-bb9c-2ab6a82bf638', cacheName='vim-cache'}"]
 
 => (query-cache jedis "vc")        ;; this cache does not exist
 nil
@@ -554,7 +547,7 @@ Continuous query cache can be created on a cluster member as well as on a cluste
 Let's connect as a client to a remote cluster (that has Jedi type on its classpath):
 
 ```clojure
-=> (def client (client-instance {:hosts ["remote-hz-cluster.host"] :group-name "dev" :group-password "dev-pass"}))
+=> (def client (client-instance {:hosts ["remote-hz-cluster.host"] :cluster-name "dev"}))
 #'chazel/client
 ```
 
@@ -701,8 +694,7 @@ More config options can be added of course, for example:
 This config can be combined with other client config options:
 
 ```clojure
-(client-instance {:group-name "dev"
-                  :group-password "dev-pass"
+(client-instance {:cluster-name "dev"
                   :hosts ["127.0.0.1"]
                   :near-cache {:name "events"
                                :time-to-live-seconds 300
@@ -714,7 +706,7 @@ This config can be combined with other client config options:
 `chazel` allows to compose configurations that will be passed to the cluster on startup:
 
 ```clojure
-(cluster-of 3 :conf (->> (with-creds {:group-name "foo" :group-password "bar"})
+(cluster-of 3 :conf (->> (connect-to {:cluster-name "foo"})
                          (with-near-cache {:in-memory-format :OBJECT
                                            :local-update-policy :CACHE_ON_UPDATE
                                            :preloader {:enabled true}}
@@ -835,11 +827,11 @@ But in case you'd like to pick a different one, you can:
 All the options can be used with `task` and `ftask`:
 
 ```clojure
-(task do-work :instance "my instance" :exec-svc-name "my-es")
+(task do-work :instance my-instance :exec-svc-name "my-es")
 ```
 
 ```clojure
-(ftask do-work :instance "my instance" :members :all :exec-svc-name "my-es")
+(ftask do-work :instance my-instance :members :all :exec-svc-name "my-es")
 ```
 
 <div id="reliable-topic"/>
@@ -870,7 +862,7 @@ We can now add this function as one of the topic listeners by calling `add-messa
 
 ```clojure
 chazel=> (add-message-listener payments process-payment)
-"f3216455-f9c8-46ef-976a-cae942b15a8d"
+#uuid "f3216455-f9c8-46ef-976a-cae942b15a8d"
 ```
 
 This listener UUID can later be used to `remove-message-listener`.
