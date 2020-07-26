@@ -1,11 +1,11 @@
-(def +version+ "0.1.22")
+(def +version+ "0.1.23")
 
 (set-env!
   :source-paths #{"src"}
   :dependencies '[[org.clojure/clojure "1.10.1"]
                   [org.clojure/tools.logging "0.4.1"]
                   [com.hazelcast/hazelcast "4.0.2"]
-                  [org.hface/hface-client "0.1.7"]
+                  [org.hface/hface-client "0.1.8"]
                   [org.clojure/data.json "1.0.0"]
                   [com.cognitect/transit-clj "0.8.275"]
                   [clj-wallhack "1.0.1"]
