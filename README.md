@@ -44,7 +44,6 @@ Hazelcast bells and whistles under the Clojure belt
 
 ```clojure
 user=> (require '[chazel.core :refer :all])
-nil
 ```
 
 let's start a 3 node cluster
@@ -1149,7 +1148,7 @@ from each node / member.
 
 ## License
 
-Copyright © 2017 tolitius
+Copyright © 2020 tolitius
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
