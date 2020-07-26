@@ -1,4 +1,4 @@
-(def +version+ "0.1.21")
+(def +version+ "0.1.22")
 
 (set-env!
   :source-paths #{"src"}
@@ -45,7 +45,7 @@
 
 (task-options!
   push {:ensure-branch nil}
-  pom {:project     'chazel
+  pom {:project     'tolitius/chazel
        :version     +version+
        :description "hazelcast bells and whistles under the clojure belt"
        :url         "https://github.com/tolitius/chazel"

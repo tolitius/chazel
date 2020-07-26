@@ -2,7 +2,10 @@
 
 Hazelcast bells and whistles under the Clojure belt
 
-[![chazel on clojars](https://clojars.org/chazel/latest-version.svg)](https://clojars.org/chazel)
+[![<! release](https://img.shields.io/badge/dynamic/json.svg?label=release&url=https%3A%2F%2Fclojars.org%2Ftolitius%2Fchazel%2Flatest-version.json&query=version&colorB=blue)](https://github.com/tolitius/chazel/releases)
+[![<! clojars>](https://img.shields.io/clojars/v/tolitius/chazel.svg)](https://clojars.org/tolitius/chazel)
+
+> ###### _(!) for pre Hazelcast 4.0: `[chazel "0.1.20"]`_
 
 - [Creating a Cluster](#creating-a-cluster)
 - [Working with Data Structures](#working-with-data-structures)
